@@ -18,7 +18,8 @@ SATySFi の環境があれば，`enumitem.satyh` を SATySFi の読み込める�
 
 ## 使い方
 
-詳細は `doc/demo.pdf` を御覧ください．
+詳細は [ドキュメント](doc/enumitem.pdf) をご覧ください．
+
 
 ## ライセンス
 

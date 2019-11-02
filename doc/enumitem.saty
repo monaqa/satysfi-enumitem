@@ -62,13 +62,12 @@ let label-showcase-alph ctx idx =
   | 7 ->  label-alph-bracket ctx idx
   | _ ->  label-Alph-bracket ctx idx
 
-
 in
 
 document (|
         title = {enumitem パッケージ};
-        author = {monaqa};
-        date = {2019/09/07};
+        author = {\@monaqa};
+        date = {2019/11/02};
         show-title = true;
         show-toc = true;
         style = ArticleJa.a4paper ;
@@ -95,7 +94,7 @@ document (|
       \listing{
         * デフォルトで豊富なスタイルを選択できる
         * 番号付き箇条書き環境をネストさせることができる
-          \footnote{2019年9月現在，標準ではサポートされていません．}
+          \footnote{2019年11月現在，標準ではサポートされていません．}
         * ネストごとに箇条書きのスタイルを変更できる
         * ユーザーによって容易にスタイルを拡張できる
       }
@@ -265,7 +264,7 @@ document (|
       }
 
       +p{
-        2019年10月27日現在，
+        2019年11月2日現在，
         \LaTeX;でいうところの description 環境に相当するコマンドはまだ実装されていません．
       }
     >
