@@ -1,0 +1,574 @@
+% 注意：この文書のタイプセットには Exdesign パッケージが必要です．
+% Exdesign: (c) Naoki Kaneko and T. Suwa 2018
+%           https://github.com/puripuri2100/exdesign
+
+@require: exdesign
+@require: article-ja
+@require: code
+@require: color
+@import: ../enumitem
+
+
+let-block +mylisting item = '<
+  +genlisting(label-bullet)(item);
+>
+
+let label-colerful ctx idx =
+  let label-width = (get-font-size ctx) *' 3.0 in
+  let r = (idx - 1) mod 4 in
+  let clr = Color.rgb (float r /. 4.) .5 .5 in
+  let ctx-colerful = ctx |> set-text-color clr in
+  let ib-label = read-inline ctx-colerful {hoge.\ } in
+  let (wid-label, _, _) = get-natural-metrics ib-label in
+  inline-skip (label-width -' wid-label) ++ ib-label
+
+let label-toi num-format ctx idx =
+  let label-width = (get-font-size ctx) *' 3.0 in
+  let it-num = num-format idx in
+  let ib-label = read-inline ctx {\textbf{問#it-num;.}\ } in
+  let (wid-label, _, _) = get-natural-metrics ib-label in
+  inline-skip (label-width -' wid-label) ++ ib-label
+
+let-block +toi item = '<
+  +genlisting(label-toi Enumitem.to-arabic)(item);
+>
+
+let label-showcase-arabic ctx idx =
+  match idx with
+  | 1 -> label-arabic-raw     ctx idx
+  | 2 -> label-arabic-dot     ctx idx
+  | 3 -> label-arabic-paren   ctx idx
+  | _ -> label-arabic-bracket ctx idx
+
+let label-showcase-roman ctx idx =
+  match idx with
+  | 1 ->  label-roman-raw     ctx idx
+  | 2 ->  label-Roman-raw     ctx idx
+  | 3 ->  label-roman-dot     ctx idx
+  | 4 ->  label-Roman-dot     ctx idx
+  | 5 ->  label-roman-paren   ctx idx
+  | 6 ->  label-Roman-paren   ctx idx
+  | 7 ->  label-roman-bracket ctx idx
+  | _ ->  label-Roman-bracket ctx idx
+
+let label-showcase-alph ctx idx =
+  match idx with
+  | 1 ->  label-alph-raw     ctx idx
+  | 2 ->  label-Alph-raw     ctx idx
+  | 3 ->  label-alph-dot     ctx idx
+  | 4 ->  label-Alph-dot     ctx idx
+  | 5 ->  label-alph-paren   ctx idx
+  | 6 ->  label-Alph-paren   ctx idx
+  | 7 ->  label-alph-bracket ctx idx
+  | _ ->  label-Alph-bracket ctx idx
+
+
+in
+
+document (|
+        title = {enumitem パッケージ};
+        author = {monaqa};
+        date = {2019/09/07};
+        show-title = true;
+        show-toc = true;
+        style = ArticleJa.a4paper ;
+        design = ArticleJa.article;
+        header-footer = ArticleJa.normalHF;
+        fonts = ArticleJa.fonts;
+|) '<
+  +section{enumitem パッケージの概要}<
+    % ここで基本的な使い方を示す．
+    % \genlisting(label-arabic-dot){}
+    % という直感的なコマンドで所望のリストが書けることを示す．
+    % \genlisting(label-roman-paren){} など直感的に指定可能である．
+    % \genlisting(bullet){} など enumerate でないものも含んでいる．
+
+    +p{
+      enumitem は，
+      組版用言語 \SATySFi; において，
+      豊富な箇条書きリストや番号付きのリストを出力するためのパッケージです．
+      \SATySFi; には標準で itemize というパッケージが標準で用意されていますが，
+      enumitem パッケージでは itemize パッケージと比較してより豊富な機能を提供します
+      （2019年11月2日現在）．
+
+      enumitem パッケージを用いることで，具体的に以下のような恩恵を受けることができます：
+      \listing{
+        * デフォルトで豊富なスタイルを選択できる
+        * 番号付き箇条書き環境をネストさせることができる
+          \footnote{2019年9月現在，標準ではサポートされていません．}
+        * ネストごとに箇条書きのスタイルを変更できる
+        * ユーザーによって容易にスタイルを拡張できる
+      }
+
+    }
+
+    +p{
+      以下，基本的な使い方，具体的なコマンドの一覧，
+      そしてカスタマイズの方法について，順に説明していきます．
+    }
+  >
+
+  +section{基本的な使い方}<
+    +p{
+      enumitem パッケージが提供する最も基本的なコマンドは \code(`+genlisting`); です．
+      これは箇条書きを生成するためのコマンドであり，
+      例えば，本文のブロックテキスト内に以下のように打つことができます．
+    }
+
+    +code(```
+      +genlisting(label-arabic-dot){
+        * hoge
+          ** hoge1
+          ** hoge2
+        * fuga
+        * piyo
+      }
+    ```);
+
+    +p{
+      すると，以下のように上から順に「アラビア数字 + ドット」で番号が振られた
+      箇条書きの結果が得られます．
+      結果から分かる通り，箇条書きのネストもサポートしています．
+    }
+
+    +genlisting(label-arabic-dot){
+      * hoge
+        ** hoge1
+        ** hoge2
+      * fuga
+      * piyo
+    }
+
+    +p{
+      すでにお気づきかもしれませんが，
+      「アラビア数字 + ドット」で番号をふる，という箇条書きスタイルは
+      \code(`+genlisting`); コマンドの第1引数
+      \code(`label-arabic-dot`); によって指定されています．
+      この指定子を適切に付け替えることで自由自在にラベルを変更することができます．
+      たとえば先程の例で第1引数を \code(`label-roman-paren`); とすれば，
+      以下のような箇条書きが代わりに表示されます．
+    }
+
+    +genlisting(label-roman-paren){
+      * hoge
+        ** hoge1
+        ** hoge2
+      * fuga
+      * piyo
+    }
+
+    +p{
+      この場合，「ローマ数字 + パーレン（丸括弧）」で番号をふる，
+      という指定を第1引数の指定子 \code(`label-roman-paren`); で与えたことになります．
+      このような指定子は他にもいくつかあります（詳細は後述）．
+    }
+
+    +p{
+      \code(`+genlisting`); は番号付きの箇条書きだけでなく，
+      番号のつかない箇条書きもサポートしています．
+      以下は番号のつかない箇条書きを出力する例です．
+    }
+
+    +code(```
+      +genlisting(label-white-bullet){
+        * hoge
+          ** hoge1
+          ** hoge2
+        * fuga
+        * piyo
+      }
+    ```);
+
+    +p{
+      これもまた第1引数を置き換えたものに過ぎず，目新しさはないでしょう．
+      このように書くと，以下のような結果が得られます．
+    }
+
+    +genlisting(label-white-bullet){
+      * hoge
+        ** hoge1
+        ** hoge2
+      * fuga
+      * piyo
+    }
+
+    +p{
+      これまでの例で，\code(`+genlistings`); の第1引数を変えることで
+      一つの文書内で簡単に複数のスタイルを実現できるということを示してきました．
+      しかし，実用的な文書においては，
+      登場する箇条書きごとにスタイルを変えるというのは稀です．
+      一つ一つの箇条書きにスタイルを設定するよりも，
+      同一のスタイルの箇条書きを簡素なコマンドで使いまわしたいことのほうが多いでしょう．
+      幸い，\SATySFi; では \LaTeX; と同じようにコマンドを自分で定義することができます．
+      もし \code(`+mylisting`); が \code(`+genlisting(label-white-bullet)`);
+      と同様に動作するようにしたければ，プリアンブル部分に以下のように書くだけで実現できます．
+    }
+
+    +code(```
+      let-block +mylisting item = '<
+        +genlisting(label-white-bullet)(item);
+      >
+      ```);
+
+    +p{
+      このように一度 \code(`+mylisting`); コマンドを定義してしまえば，
+      先ほどと同じ箇条書きをより簡単に実現できます．
+    }
+
+    +code(```
+      +mylisting{
+        * hoge
+          ** hoge1
+          ** hoge2
+        * fuga
+        * piyo
+      }
+    ```);
+
+
+    +p{
+      標準の itemize パッケージ同様，
+      \code(`+listing`); コマンド及び \code(`+enumerate`); コマンドが
+      enumitem パッケージにおいてもデフォルトで定義されています．
+      これも，やはり上で述べたものと同様の方法で
+      \code(`+genlisting`); コマンドから定義されています．
+      \code(`+listing`); を定義する際のラベル指定はそれぞれ
+      \code(`label-bullet`);
+      であり，以下のようなスタイルになっています．
+    }
+
+    +listing{
+      * hoge
+        ** hoge1
+        ** hoge2
+      * fuga
+      * piyo
+    }
+
+    +p{
+      \code(`+enumerate`); コマンドの定義がどうなっているのか気になるかもしれませんが，
+      これはもう少しばかり複雑なことを行っているので，説明は後ろの章に譲ることとします．
+    }
+  >
+
+  +section{コマンドとスタイル指定子}<
+
+    +p{
+      ここからは，enumitem パッケージが提供するコマンドとスタイルの一覧について述べます．
+    }
+
+    +subsection{コマンド一覧}<
+
+      +p{
+        enumitem パッケージでは，
+        箇条書きを作成するためのコマンドとして以下のコマンドが定義されています．
+      }
+
+      +p{
+        2019年10月27日現在，
+        \LaTeX;でいうところの description 環境に相当するコマンドはまだ実装されていません．
+      }
+    >
+
+    +subsection{スタイル指定子一覧}<
+
+      +p{
+        インデックスを指定するためのパラメータです．
+        これらは，実際にインデックスを見たほうが早いでしょう．
+      }
+
+      +listing{
+        * アラビア数字系
+
+          \genlisting(label-showcase-arabic){
+            * \code(`label-arabic-raw`);
+            * \code(`label-arabic-dot`);
+            * \code(`label-arabic-paren`);
+            * \code(`label-arabic-bracket`);
+          }
+
+        * ローマ数字系
+
+          \genlisting(label-showcase-roman){
+            *  \code(`label-roman-raw`);
+            *  \code(`label-Roman-raw`);
+            *  \code(`label-roman-dot`);
+            *  \code(`label-Roman-dot`);
+            *  \code(`label-roman-paren`);
+            *  \code(`label-Roman-paren`);
+            *  \code(`label-roman-bracket`);
+            *  \code(`label-Roman-bracket`);
+          }
+
+        * アルファベット系
+
+          \genlisting(label-showcase-alph){
+            *   \code(`label-alph-raw`);
+            *   \code(`label-Alph-raw`);
+            *   \code(`label-alph-dot`);
+            *   \code(`label-Alph-dot`);
+            *   \code(`label-alph-paren`);
+            *   \code(`label-Alph-paren`);
+            *   \code(`label-alph-bracket`);
+            *   \code(`label-Alph-bracket`);
+          }
+      }
+
+      +p{
+        これらの正体が何であるか，気になる方もいると思います．
+        \code(`+genlisting`); の第1引数に指定する列挙型のごとく振る舞っていますが，
+        その実体は「現在のテキスト処理文脈とインデックス値を受け取り，
+        ラベルとすべきインラインボックス列を返す」役割を持った
+        \code(`context -> int -> inline-boxes`); 型の関数です．
+        後述するようなカスタマイズを行わない限り
+        ユーザがこの関数を再定義したり明示的に引数を渡したりする機会はないため，
+        本文中では列挙型と同じように扱うことができます．
+        逆に言えば，
+        ユーザ側が \code(`context -> int -> inline-boxes`); 型の関数を定義したならば，
+        それがそのままユーザ定義された新たなインデックス指定パラメータとなります．
+      }
+    >
+  >
+
+  +section{カスタマイズ}<
+
+    +p{
+      ここでは，enumitem パッケージを用いて自身の好みの箇条書き環境を作成するには
+      どのようにすればよいかについて述べます．
+      内部の実装や型についても触れます．
+    }
+
+    +subsection{数字の装飾を変えてみる}<
+
+      +p{
+        前章のコマンド一覧で紹介したとおり，
+        enumitem パッケージではすでに 20 以上のインデックス指定関数が定義されています．
+        しかし，それらはそれぞれ独立に定義されているわけではなく，
+        効率的にコードを使い回すように定義しています．
+        現に番号付きのインデックス指定関数を見れば，
+        それらは実際には2つの要素の掛け合わせで構成されている（数学的には直積）
+        ことが容易にわかるでしょう．
+        具体的には，たとえば \code(`label-arabic-raw`);関数は以下のように定義されています:
+      }
+
+      +code(```
+      let label-arabic-raw = Enumitem.label-raw Enumitem.to-arabic
+      ```);
+
+      +p{
+        ここで \code(`Enumitem.label-raw`); は
+        \code(`(int -> inline-text) -> context -> int -> inline-boxes`);
+        の型を持つ関数であり，
+        一方で \code(`Enumitem.to-arabic`); は
+        \code(`int -> inline-text`);
+        の型を持つ関数です．
+      }
+
+      +p{
+        enumitem パッケージ内では，このように
+        5種類の to- 型関数
+        (
+        \code(`Enumitem.to-arabic`);,
+        \code(`Enumitem.to-roman`);,
+          \code(`Enumitem.to-Roman`);,
+          \code(`Enumitem.to-alph`);,
+          \code(`Enumitem.to-Alph`);
+        )
+        と4種類の label- 型関数
+        (
+          \code(`Enumitem.label-raw`);,
+          \code(`Enumitem.label-dot`);,
+          \code(`Enumitem.label-paren`);,
+          \code(`Enumitem.label-bracket`);
+        )
+        を定義することにより，20種類のインデックス指定関数を生み出しています．
+      }
+
+      +p{
+        この性質をうまく使えば，ユーザ定義の箇条書き環境をかんたんに定義することができます．
+        たとえば，「\textbf{問1.}\ 」のようなインデックスを持つ箇条書き環境を定義してみましょう．
+        1 はアラビア数字ですから，\code(`Enumitem.to-arabic`);関数をそのまま用いることができます．
+      }
+
+      +code(```
+        let label-toi num-format ctx idx =
+          let label-width = (get-font-size ctx) *' 3.0 in
+          let it-num = num-format idx in
+          let ib-label = read-inline ctx {\textbf{問#it-num;.}\ } in
+          let (wid-label, _, _) = get-natural-metrics ib-label in
+          inline-skip (label-width -' wid-label) ++ ib-label
+
+        let-block +toi item = '<
+          +genlisting(label-toi Enumitem.to-arabic)(item);
+        >
+      ```);
+
+      +p{
+        \code(`+toi`); コマンドを用いて作成した箇条書きの例を下に示します．
+      }
+
+      +toi{
+        * こんな感じ．
+        * こんなふうにできる．
+      }
+
+
+    >
+
+    +subsection{数字の書式を変える}<
+
+      +p{
+        すでに見たとおり，デフォルトでは大きく分けて
+        アラビア数字，ローマ数字，アルファベットの3種類に基づいた
+        数字を用いてラベルを振ることができます．
+        しかし，場合によってはそれ以外の書式が必要になることがあります．
+        たとえばカタカナを用いて「(ア), (イ), (ウ), ...」といったインデックスは
+        日本語の文書においてよく見かけます．
+      }
+
+    >
+
+    +subsection{自由な箇条書きを定義する}<
+
+      +p{
+        上では既存のコマンドを使い回す方法から説明しましたが，
+        これは実装を少し楽にするためのやり方であって，
+        本来は
+        \code(`context -> int -> inline-boxes`);
+        型の関数さえ用意すれば，自身の好きなラベルに付け替えることができます．
+        以下の例は，テキストそのものを変えるのではなく，
+        テキストの処理文脈を変更した例です．
+        ユーザー定義された関数も通常の指定子と全く同様に，
+        \code(`+genlisting`); コマンドの第1引数として呼び出すだけで使うことができます．
+      }
+
+      +code(```
+          let label-colerful ctx idx =
+            let label-width = (get-font-size ctx) *' 3.0 in
+            let r = (idx - 1) mod 4 in
+            let clr = Color.rgb (float r /. 4.) .5 .5 in
+            let ctx-colerful = ctx |> set-text-color clr in
+            let ib-label = read-inline ctx-colerful {hoge.\ } in
+            let (wid-label, _, _) = get-natural-metrics ib-label in
+            inline-skip (label-width -' wid-label) ++ ib-label
+      ```);
+
+      +code(```
+          +genlisting(label-colerful){
+            * こんなことすらできてしまいます．
+            * こんなことすらできてしまいます．
+            * こんなことすらできてしまいます．
+            * こんなことすらできてしまいます．
+          }
+      ```);
+
+      +genlisting(label-colerful){
+        * こんなことすらできてしまいます．
+        * こんなことすらできてしまいます．
+        * こんなことすらできてしまいます．
+        * こんなことすらできてしまいます．
+      }
+
+      +p{
+        さらに言えば，インデックスの値に応じて関数の戻り値を変える必要すらありません．
+        実際，番号の付かない箇条書き環境を実現するためのラベルは，いずれも
+        インデックスにかかわらず常に一定のインラインボックス列を返すような関数によって実現されています．
+      }
+    >
+
+    +subsection{箇条書きのネストの深さによってスタイルを変える}<
+      +p{
+        ネストの深さに応じてラベルのスタイルを変える，という体裁は比較的頻繁に見かけます．
+        箇条書きコマンドの中で \code(`\genlisting`); コマンドを用いれば実現できなくはありませんが，
+        折角 \SATySFi; ではネストされた箇条書きを表現するための糖衣構文が標準で用意されているので，
+        できればそれを使って完結に書きたいところです．
+      }
+      +p{
+        enumitem パッケージでは，そのような需要に応えるために
+        \code(`+genlistings`); コマンドを用意しています．
+        \code(`+genlistings`); コマンドは
+        \code(`+genlisting`); コマンドと異なり，
+        第1引数には
+        \code(`int -> context -> int -> inline-boxes`);
+        型の関数を指定します．
+        これは，ネストの深さに対応する変数も追加した
+        3 変数の関数を渡すことでインデックスのスタイルを指定することを意味しています．
+        これにより，ネストの深さによってスタイルを変える事ができるようになります．
+        百聞は一見に如かず．例を見てみましょう．
+      }
+    >
+
+    +code(```
+      +genlistings(fun depth ctx idx -> (
+        match depth with
+        | 0 -> label-arabic-paren ctx idx
+        | 1 -> label-alph-bracket ctx idx
+        | _ -> label-roman-dot    ctx idx
+      )){
+        * hoge
+        * fuga
+          ** fuga1
+            *** fuga11
+            *** fuga12
+          ** fuga2
+      }
+    ```);
+
+    +p{
+      このように， depth, ctx, idx の順に引数を受け取る関数を入れます
+      \footnote{
+        今回は紙面節約のためにプリアンブル部分で関数を定義するのではなく
+        引数に無名関数を直接入れていますが，
+        今までの \code(`+genlisting`); コマンドの説明のときと同様に，
+        プリアンブルで定義された関数を入れることも当然可能です．
+      }．
+      depth はネストの深さであり，
+      0から始まって入れ子の内部になればなるほど数字がインクリメントされていきます．
+      ctx, idx はおなじみのテキスト処理文脈及びインデックスです．
+      ここまで読んだ方にはすでに想像がついているかもしれませんが，
+      出力結果は以下のようになります．
+    }
+
+    +genlistings(fun depth -> (
+      match depth with
+      | 0 -> label-arabic-paren
+      | 1 -> label-alph-bracket
+      | _ -> label-roman-dot
+    )){
+      * hoge
+      * fuga
+        ** fuga1
+          *** fuga11
+          *** fuga12
+        ** fuga2
+    }
+
+    +p{
+      上のコード例では分かりやすさを優先して少し冗長に書きました．
+      もう少し簡潔に，以下のように書いても同じ結果が得られます．
+    }
+
+    +code(```
+      +genlistings(fun depth -> (
+        match depth with
+        | 0 -> label-arabic-paren
+        | 1 -> label-alph-bracket
+        | _ -> label-roman-dot
+      )){
+        * hoge
+        * fuga
+          ** fuga1
+            *** fuga11
+            *** fuga12
+          ** fuga2
+      }
+    ```);
+
+    +p{
+      先程説明を後回しにしたデフォルトコマンド \code(`+enumerate`); も，
+      genlistings コマンドによってネスト深さごとに体裁が変わるように定義されています．
+    }
+
+  >
+
+>
