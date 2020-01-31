@@ -77,6 +77,16 @@ let label-Roman-framed ctx idx =
   inline-skip (label-width -' wid-label) ++ ib-label
 
 
+let-block +description item = '<
+  +gendescription(|
+    nextline = true;
+    title-inner-gap = 15pt;
+    inner-indent = (fun title-wid -> 25pt);
+    % let ctx-title = ctx |> set-paragraph-margin 12pt 8pt in
+    title-func = (fun ctx title -> read-inline ctx {\textbf{#title;}} );
+  |)(item);
+>
+
 in
 % }}}
 
@@ -272,6 +282,38 @@ document (|
       なお，\code(`+enumerate`); コマンドも enumitem パッケージによって定義されていますが，
       \code(`+listing`); と比べてもう少しばかり複雑なことを行っているので，
       説明は後ろの章に譲ることとします．
+    }
+
+    +p{
+      さて，\LaTeX; や HTML において，
+      箇条書きとは3種類ありました．
+      番号のない箇条書き，番号付き箇条書き，そして定義リストです．
+    }
+
+    +description{
+      * 順序なしリスト
+
+        ** 順序を表すインデックスのない箇条書きです．
+           通常，\LaTeX; では itemize 環境，
+           HTML では \code(`<ul>`); タグにより組まれます．
+
+      * 順序リスト
+
+        ** 順序を表すインデックスのある箇条書きです．
+           通常，\LaTeX; では enumerate 環境，
+           HTML では \code(`<ol>`); タグにより組まれます．
+
+      * 定義リスト
+
+        ** 各インデックス毎に固有の単語が付与されている箇条書きです．
+           通常，\LaTeX; では description 環境，
+           HTML では \code(`<dl>`); タグにより組まれます．
+        ** この説明で用いられているリストは定義リストです．
+    }
+
+    +p{
+      3番目の定義リストは，\LaTeX; では description 環境として知られています．
+      Enumitem パッケージは，\LaTeX; における description に相当するコマンドも用意されています．
     }
   >
 
@@ -507,13 +549,35 @@ document (|
 
       +p{
         Enumitem パッケージ内では，5種類の to- 型関数が用意されています．
-        \listing{
-          * \code(`Enumitem.to-arabic`);: 整数をアラビア数字の inline text に変換する．
-          * \code(`Enumitem.to-roman`);: 整数をローマ数字（小文字）の inline text に変換する．
-          * \code(`Enumitem.to-Roman`);: 整数をローマ数字（大文字）の inline text に変換する．
-          * \code(`Enumitem.to-alph`);: 整数をアルファベット（小文字）の inline text に変換する．
-          * \code(`Enumitem.to-Alph`);: 整数をアルファベット（大文字）の inline text に変換する．
-        }%
+      }
+      +description{
+        * \code(`Enumitem.to-arabic`); 関数
+          ** 整数をアラビア数字の inline text に変換する．
+          ** 2つ並べるとこんなふうになる．
+             長い inline-text が来ても大丈夫．
+             長い inline-text が来ても大丈夫．
+             長い inline-text が来ても大丈夫．
+
+        * \code(`Enumitem.to-roman`); 関数
+          ** 整数をローマ数字（小文字）の inline text に変換する．
+
+        * \code(`Enumitem.to-Roman`); 関数
+          ** 整数をローマ数字（大文字）の inline text に変換する．
+
+        * \code(`Enumitem.to-alph`); 関数
+          ** 整数をアルファベット（小文字）の inline text に変換する．
+
+        * \code(`Enumitem.to-Alph`); 関数
+          ** 整数をアルファベット（大文字）の inline text に変換する．
+      }%
+      +p{
+        % \listing{
+        %   * \code(`Enumitem.to-arabic`);: 整数をアラビア数字の inline text に変換する．
+        %   * \code(`Enumitem.to-roman`);: 整数をローマ数字（小文字）の inline text に変換する．
+        %   * \code(`Enumitem.to-Roman`);: 整数をローマ数字（大文字）の inline text に変換する．
+        %   * \code(`Enumitem.to-alph`);: 整数をアルファベット（小文字）の inline text に変換する．
+        %   * \code(`Enumitem.to-Alph`);: 整数をアルファベット（大文字）の inline text に変換する．
+        % }%
         この関数は，スタイル指定子をユーザ定義する際にも役立ちます．
         たとえば整数値を大文字のローマ数字へと変換するのは
         ユーザがプリアンブルで定義するには多少面倒ですが，

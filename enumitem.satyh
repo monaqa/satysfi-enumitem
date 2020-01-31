@@ -20,6 +20,14 @@ module Enumitem : sig
   direct \genlisting : [(context -> int -> inline-boxes); itemize] inline-cmd
   direct \genlistings : [(int -> context -> int -> inline-boxes); itemize] inline-cmd
 
+  direct +gendescription : ['a; itemize] block-cmd
+    constraint 'a :: (|
+      nextline : bool;
+      title-inner-gap : length;
+      inner-indent : length -> length;
+      title-func : context -> inline-text -> inline-boxes;
+    |)
+
   % index-specify command (ordered index)
   val label-raw     : (int -> inline-text) -> context -> int -> inline-boxes
   val label-dot     : (int -> inline-text) -> context -> int -> inline-boxes
@@ -116,6 +124,48 @@ end = struct
     {\listing-from-block<+genlisting(idxrule)(item);>} 
   let-inline \genlistings idxrules item =
     {\listing-from-block<+genlistings(idxrules)(item);>} 
+
+  % description command
+
+  % description style.
+
+  let desc-style-nextline record ctx title innerlst = 
+        let ib-title = record#title-func ctx title in
+        let bb-title = line-break true false ctx ib-title in
+
+        let bb-inner-func ctx =
+          concat-blocks (
+            List.map (fun it -> line-break true true ctx ((read-inline ctx it) ++ inline-fil))
+              innerlst
+          )
+        in
+
+        % let ctx-inner = ctx |> set-paragraph-margin 8pt 8pt in
+
+        let box-inner =
+          let title-wid = get-natural-width ib-title +' record#title-inner-gap in
+          let indent = record#inner-indent title-wid in
+          let box-width = (get-text-width ctx) -' indent in
+          let ib-inner = embed-block-top ctx box-width bb-inner-func in
+          line-break false true ctx (inline-skip indent ++ ib-inner)
+        in
+
+        bb-title +++ box-inner
+
+  let desc-item record ctx (Item(title, itmzlst)) =
+    let innerlst = List.map (fun (Item(text, _)) -> text) itmzlst in
+    if record#nextline then
+      desc-style-nextline record ctx title innerlst
+    else
+      % not implemented
+      desc-style-nextline record ctx title innerlst
+
+  let description record ctx (Item(_, itmzlst)) =
+    let bblst = List.map (desc-item record ctx) itmzlst in
+      (concat-blocks bblst)
+
+  let-block ctx +gendescription record item = description record ctx item
+
 
   % }}}
 
