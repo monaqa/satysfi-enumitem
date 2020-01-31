@@ -1,0 +1,12 @@
+;; For Satyrographos 0.0.2 series
+(version 0.0.2)
+
+(library
+  (name "enumitem")
+  (version "0.1.0")
+  (sources
+    (
+     (package "enumitem.satyh" "./enumitem.satyh")))
+  (opam "satysfi-enumitem.opam")
+  (dependencies ())
+  (compatibility ((satyrographos "0.0.1"))))
