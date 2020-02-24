@@ -1,26 +1,40 @@
 # satysfi-enumitem
 
-## 概要
+`enumitem` is a [SATySFi](https://github.com/gfngfn/SATySFi) package
+for flexible ordered/unordered/description lists.
+This package was named after the 
+[enumitem](https://www.ctan.org/pkg/enumitem) package in LaTeX.
 
-LaTeX の [enumitem パッケージ](https://www.ctan.org/pkg/enumitem) に相当する機能を
-[SATySFi](https://github.com/gfngfn/SATySFi) で実現するパッケージ．
-以下の機能を提供しています．
+This package provides the following features/commands:
 
-- 標準に比べて自由度の高い箇条書きコマンド
-- 箇条書きのスタイルのカスタマイズ機構
-- ネスト可能な番号付き箇条書き環境
+- More flexible and customizable listing commands than those in the standard `itemize` package
+- Ordered lists that can be nested
+- Commands for description list (definition list)
 
-## インストール
+## installation
 
-動作には SATySFi (>=0.0.3) が必要です．
-SATySFi の環境があれば，`enumitem.satyh` を SATySFi の読み込める場所に置けば完了です．
-一般には `~/.satysfi/dist/packages` になると思われます．
+You can install `enumitem` package with
+[Satyrographos](https://github.com/na4zagin3/satyrographos),
+a package manager of SATySFi.
+First you should install Satyrographos
+(see [README of Satyrographos](https://github.com/na4zagin3/satyrographos/blob/master/README.md))
+and then type in your terminal as follows:
 
-## 使い方
+```
+opam install satysfi-class-slydifi
+satyrographos install
+```
 
-詳細は [ドキュメント](doc/enumitem.pdf) をご覧ください．
+After installation, you can import this package by writing the following sentence in preamble (top of `.saty` file):
 
+```
+@require: enumitem/enumitem
+```
 
-## ライセンス
+## Usage
+
+See [the documentation of enumitem](doc/enumitem.pdf) (Japanese only).
+
+## License
 
 MIT
