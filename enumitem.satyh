@@ -22,11 +22,29 @@ module Enumitem : sig
 
   direct +gendescription : ['a; itemize] block-cmd
     constraint 'a :: (|
+      % 各アイテムのタイトルと本体の間に改行を挟むか否か．
+      nextline : bool;
+      % タイトルと本体の間に挿入する空白の幅．
+      title-inner-gap : length;
+      % 本文のインデント量．タイトルの幅に応じて動的に変えられるようにするため，
+      % 「タイトルの幅 (title-inner-gap 込) を引数として，インデント量を返す関数」
+      % を指定する．
+      inner-indent : length -> length;
+      % タイトルを組むのに用いられる関数．
+      % タイトルを太字で組むなどの用途に対応するため．
+      % 最も単純なのは `read-inline` をそのまま指定すること．
+      title-func : context -> inline-text -> inline-boxes;
+    |)
+  direct \gendescription : ['a; itemize] inline-cmd
+    constraint 'a :: (|
       nextline : bool;
       title-inner-gap : length;
       inner-indent : length -> length;
       title-func : context -> inline-text -> inline-boxes;
     |)
+
+  direct +description : [itemize] block-cmd
+  direct \description : [itemize] inline-cmd
 
   % index-specify command (ordered index)
   val label-raw     : (int -> inline-text) -> context -> int -> inline-boxes
@@ -49,6 +67,7 @@ end = struct
 
   let (+++>) = List.fold-left (+++)
   let concat-blocks = (+++>) block-nil
+  let len-max l1 l2 = if l1 >' l2 then l1 else l2
 
   let item-indent-ratio = 1.5
   let item-gap-ratio = 0.75
@@ -130,27 +149,74 @@ end = struct
   % description style.
 
   let desc-style-nextline record ctx title innerlst = 
-        let ib-title = record#title-func ctx title in
-        let bb-title = line-break true false ctx ib-title in
+    % margin に関する数値
+    let fsize = get-font-size ctx in
+    let gap-inner-item = fsize *' 0.5 in  % 標準の行送りと揃える
+    let gap-between-item = fsize *' 0.7 in
 
-        let bb-inner-func ctx =
-          concat-blocks (
-            List.map (fun it -> line-break true true ctx ((read-inline ctx it) ++ inline-fil))
-              innerlst
-          )
-        in
+    let ib-title = record#title-func ctx title in
+    let bb-title =
+      let ctx-adjmgn = ctx |> set-paragraph-margin gap-between-item gap-inner-item in
+      line-break true false ctx-adjmgn ib-title
+    in
 
-        % let ctx-inner = ctx |> set-paragraph-margin 8pt 8pt in
+    let bb-inner-func ctx =
+      concat-blocks (
+        List.map (fun it -> line-break true true ctx ((read-inline ctx it) ++ inline-fil))
+          innerlst
+      )
+    in
 
-        let box-inner =
-          let title-wid = get-natural-width ib-title +' record#title-inner-gap in
-          let indent = record#inner-indent title-wid in
-          let box-width = (get-text-width ctx) -' indent in
-          let ib-inner = embed-block-top ctx box-width bb-inner-func in
-          line-break false true ctx (inline-skip indent ++ ib-inner)
-        in
+    let box-inner =
+      let title-wid = get-natural-width ib-title +' record#title-inner-gap in
+      let indent = record#inner-indent title-wid in
+      let box-width = (get-text-width ctx) -' indent in
+      let ctx-inner = ctx |> set-paragraph-margin gap-inner-item gap-inner-item in
+      let ib-inner = embed-block-top ctx-inner box-width bb-inner-func in
+      let ctx-adjmgn = ctx |> set-paragraph-margin gap-inner-item gap-between-item in
+      line-break false true ctx-adjmgn (inline-skip indent ++ ib-inner)
+    in
 
-        bb-title +++ box-inner
+    bb-title +++ box-inner
+
+  let desc-style-nonextline record ctx title innerlst = 
+    % margin に関する数値
+    let fsize = get-font-size ctx in
+    let gap-inner-item = fsize *' 0.7 in  % 標準の行送りと揃える
+    let gap-between-item = fsize *' 1.0 in
+    let ctx-adjmgn = ctx |> set-paragraph-margin gap-between-item gap-between-item in
+
+    % 「インデント幅」 の width を持つ inline-boxes として ib-title を作成
+    let ib-title = record#title-func ctx title in
+    let (wid-title, ht-title, dp-title) = get-natural-metrics ib-title in
+    let inner-indent = record#inner-indent (wid-title +' record#title-inner-gap) in
+    let ib-title-box =
+      inline-graphics inner-indent ht-title dp-title
+        (fun (x, y) -> [draw-text (x, y) ib-title])
+    in
+
+    let bb-inner-func ctx =
+      let first-indent idx =
+        if idx == 0 then
+          len-max (wid-title -' inner-indent +' record#title-inner-gap) 0pt
+        else 0pt
+      in
+      concat-blocks (
+        List.mapi (
+          fun idx it ->
+            line-break true true ctx
+              ((inline-skip (first-indent idx)) ++ (read-inline ctx it) ++ inline-fil)
+        )
+          innerlst
+      )
+    in
+
+    let box-width = (get-text-width ctx) -' inner-indent in
+    let ctx-inner = ctx |> set-paragraph-margin gap-inner-item gap-inner-item in
+    let ib-inner = embed-block-top ctx-inner box-width bb-inner-func in
+    let ctx-adjmgn = ctx |> set-paragraph-margin gap-inner-item gap-between-item in
+
+    line-break false true ctx-adjmgn (ib-title-box ++ ib-inner)
 
   let desc-item record ctx (Item(title, itmzlst)) =
     let innerlst = List.map (fun (Item(text, _)) -> text) itmzlst in
@@ -158,7 +224,7 @@ end = struct
       desc-style-nextline record ctx title innerlst
     else
       % not implemented
-      desc-style-nextline record ctx title innerlst
+      desc-style-nonextline record ctx title innerlst
 
   let description record ctx (Item(_, itmzlst)) =
     let bblst = List.map (desc-item record ctx) itmzlst in
@@ -166,6 +232,17 @@ end = struct
 
   let-block ctx +gendescription record item = description record ctx item
 
+  let-block +description item = '<
+    +gendescription(|
+      nextline = true;
+      title-inner-gap = 5pt;
+      inner-indent = (fun title-wid -> 20pt);
+      title-func = read-inline;
+    |)(item);
+  >
+
+  let-inline \gendescription record item = {\listing-from-block<+gendescription(record)(item);>}
+  let-inline \description item = {\listing-from-block<+description(item);>}
 
   % }}}
 
