@@ -6,8 +6,8 @@
 
 ## 1.0.1 (2020-02-02)
 
-* add build file/package file for Satyrographos
+* add build file and package file for Satyrographos
 
 ## 1.0.0
 
-* add satysfi-enumitem package
+* add `satysfi-enumitem` package

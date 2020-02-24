@@ -11,7 +11,7 @@ This package provides the following features/commands:
 - Ordered lists that can be nested
 - Commands for description list (definition list)
 
-## installation
+## Installation
 
 You can install `enumitem` package with
 [Satyrographos](https://github.com/na4zagin3/satyrographos),
