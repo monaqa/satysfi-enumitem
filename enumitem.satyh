@@ -12,13 +12,16 @@ let max-float f1 f2 = if (1pt *' f1) >' (1pt *' f2) then f1 else f2
 
 module Enumitem : sig
 
-
   % genlisting command
   direct +genlisting : [(context -> int -> inline-boxes); itemize] block-cmd
+  direct +xgenlisting : [(context -> int -> inline-boxes); itemize] block-cmd
   direct +genlistings : [(int -> context -> int -> inline-boxes); itemize] block-cmd
+  direct +xgenlistings : [(int -> context -> int -> inline-boxes); itemize] block-cmd
   direct \listing-from-block : [block-text] inline-cmd
   direct \genlisting : [(context -> int -> inline-boxes); itemize] inline-cmd
+  direct \xgenlisting : [(context -> int -> inline-boxes); itemize] inline-cmd
   direct \genlistings : [(int -> context -> int -> inline-boxes); itemize] inline-cmd
+  direct \xgenlistings : [(int -> context -> int -> inline-boxes); itemize] inline-cmd
 
   direct +gendescription : ['a; itemize] block-cmd
     constraint 'a :: (|
@@ -63,6 +66,12 @@ module Enumitem : sig
   val to-alph  : int -> inline-text
   val to-Alph  : int -> inline-text
 
+  % item flag
+  val item-flag : context -> bool
+  direct \set-flag : [] inline-cmd
+  direct \get-item-it : [] inline-cmd
+  direct \set-item-it : [inline-text] inline-cmd
+
 end = struct
 
   let (+++>) = List.fold-left (+++)
@@ -75,6 +84,16 @@ end = struct
   let font-shrink-ratio = 1.00
   let minimal-font-ratio = 1.00
 
+  % ad hoc 注意！
+  % read-inline を経由することにより，
+  % item-flag による flag の値の取得を強制的に遅延評価っぽくしている．
+  let-mutable item-flag-it-ref <- {}
+  let item-flag ctx = (get-natural-width (read-inline ctx !item-flag-it-ref) >' 0pt)
+  let-inline ctx \set-flag = let () = item-flag-it-ref <- {xxx} in inline-nil
+
+  let-mutable item-it-ref <- {}
+  let-inline \get-item-it = !item-it-ref
+  let-inline ctx \set-item-it it = let () = item-it-ref <- it in inline-nil
 
   % genlisting command {{{
 
@@ -87,6 +106,56 @@ end = struct
         let ctx-item = ctx
           |> set-font-size item-font-size
         in
+
+        % フラグ系は general-list-item では使えない．
+        % すべてリセット
+        let () = item-flag-it-ref <- {} in
+        let () = item-it-ref <- {} in
+
+        % index の inline box
+        let ib-index = idxrules depth ctx-item index in
+
+        % index の幅を計算
+        let index-width = get-natural-width ib-index in
+        let item-gap = base-font-size *' item-gap-ratio in
+        let parent-indent = base-font-size *' (item-indent-ratio *. (float depth)) in
+
+        % 本文の inline-box. embed-block-top で作る．
+        % 幅は index-width のぶん狭くなる
+        let item-text-width = ((get-text-width ctx-item) -' parent-indent -' index-width) in
+        let ib-parent-text =
+          embed-block-top ctx-item item-text-width (fun ctx ->
+            line-break true true (ctx |> set-paragraph-margin item-gap item-gap)
+              (read-inline ctx parent ++ inline-fil)
+          )
+        in
+        % index と text をあわせたものが parent の block-box になる
+        let bb-parent =
+          line-break true true (ctx-item |> set-paragraph-margin item-gap item-gap)
+            ((inline-skip parent-indent) ++ ib-index ++ ib-parent-text)
+        in
+
+        % 子の item を呼び出す
+        let bblst-children = List.mapi (
+          fun i -> general-list-item (i + 1) ctx-item idxrules (depth + 1)
+        ) children in
+
+        bb-parent +++> bblst-children
+
+  let-rec general-list-item-extend : int -> context -> (int -> context -> int -> inline-boxes) -> int -> itemize -> block-boxes
+    | index ctx idxrules depth (Item(parent, children)) =
+        % フォント関係の設定
+        let base-font-size = get-font-size ctx in
+        let shrink-ratio = max-float (power-float-int font-shrink-ratio depth) minimal-font-ratio in
+        let item-font-size = base-font-size *' shrink-ratio in
+        let ctx-item = ctx
+          |> set-font-size item-font-size
+        in
+
+        % ここで先に parent の内容を read-inline しておく．
+        % そうすることで， parent の it の中のコマンドを評価し，
+        % 副作用がある場合は予め走らせておく！
+        let _ = read-inline ctx parent in
 
         % index の inline box
         let ib-index = idxrules depth ctx-item index in
@@ -106,6 +175,10 @@ end = struct
           )
         in
 
+        % item-flag-ref 及び item-it-ref について，起きてしまった副作用をリセットする．
+        let () = item-flag-it-ref <- {} in
+        let () = item-it-ref <- {} in
+
         % index と text をあわせたものが parent の block-box になる
         let bb-parent =
           line-break true true (ctx-item |> set-paragraph-margin item-gap item-gap)
@@ -114,10 +187,16 @@ end = struct
 
         % 子の item を呼び出す
         let bblst-children = List.mapi (
-          fun i -> general-list-item (i + 1) ctx-item idxrules (depth + 1)
+          fun i -> general-list-item-extend (i + 1) ctx-item idxrules (depth + 1)
         ) children in
 
         bb-parent +++> bblst-children
+
+  let general-list-extend ctx idxrules (Item(_, itmzlst)) =
+    let base-font-size = get-font-size ctx in
+    let item-gap-outer = base-font-size *' item-gap-outer-ratio in
+    let bblst = List.mapi (fun i -> general-list-item-extend (i + 1) ctx idxrules 0) itmzlst in
+      (concat-blocks bblst)
 
   let general-list ctx idxrules (Item(_, itmzlst)) =
     let base-font-size = get-font-size ctx in
@@ -130,10 +209,20 @@ end = struct
     let idxrules _ = idxrule in
     general-list ctx idxrules item
 
+  % idxrule: ctx, index (item に振る番号) をとって index の inline-boxes を返す関数．
+  let-block ctx +xgenlisting idxrule item =
+    let idxrules _ = idxrule in
+    general-list-extend ctx idxrules item
+
   % idxrules: depth (itemize のネストの深さ), ctx, index (item に振る番号) をとって
   %           index の inline-boxes を返す関数．
   let-block ctx +genlistings idxrules item =
     general-list ctx idxrules item
+
+  % idxrules: depth (itemize のネストの深さ), ctx, index (item に振る番号) をとって
+  %           index の inline-boxes を返す関数．
+  let-block ctx +xgenlistings idxrules item =
+    general-list-extend ctx idxrules item
 
   let-inline ctx \listing-from-block block-listing =
     let ib-block = embed-block-breakable ctx (read-block ctx '<#block-listing;>) in
@@ -141,8 +230,15 @@ end = struct
 
   let-inline \genlisting idxrule item =
     {\listing-from-block<+genlisting(idxrule)(item);>} 
+
   let-inline \genlistings idxrules item =
     {\listing-from-block<+genlistings(idxrules)(item);>} 
+
+  let-inline \xgenlisting idxrule item =
+    {\listing-from-block<+xgenlisting(idxrule)(item);>}
+
+  let-inline \xgenlistings idxrules item =
+    {\listing-from-block<+xgenlistings(idxrules)(item);>}
 
   % description command
 

@@ -514,8 +514,7 @@ document (|
           nextline = false;
           title-inner-gap = 10pt;
           inner-indent = (fun title-wid -> title-wid);
-          title-func =
-            (fun ctx title -> read-inline ctx {\textbf{#title;}} );
+          title-func = (fun ctx title -> read-inline ctx {\textbf{#title;}});
         |){
           * 英語のパングラム
             ** The quick brown fox jumps over the lazy dog.
