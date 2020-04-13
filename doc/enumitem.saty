@@ -10,6 +10,32 @@
 @import: ../enumitem
 
 % Preamble {{{
+let square-label is-checked ctx idx =
+  let fs value = (get-font-size ctx) *' value in
+  let fsize = fs 1.0 in
+  let gr-square (x, y) =
+    stroke 0.5pt Color.black (Gr.rectangle (0pt, 0pt) (fs 0.5, fs 0.5 ))
+      |> shift-graphics (x, y +' fs 0.15)
+  in
+  let gr-mark-done (x, y) =
+    stroke 0.5pt Color.black (
+      Gr.poly-line (fs (0.0 -. 0.1), fs 0.45) [(fs 0.15, fs 0.15); (fs 0.75, fs 0.85)])
+      |> shift-graphics (x, y +' fs 0.15)
+  in
+  let gr point =
+    if is-checked then
+      [gr-square point; gr-mark-done point]
+    else
+      [gr-square point]
+  in
+  inline-graphics fsize fsize 0pt gr
+
+let done = Enumitem.make-param false
+let-inline \done = {\setitem(done)(true);}
+
+let-block +todo-list item = '<
+  +xgenlisting(fun ctx idx -> square-label (Param.get done) ctx idx)(item);
+>
 
 let-block +mylisting item = '<
   +genlisting(label-bullet)(item);
@@ -100,6 +126,7 @@ let-inline \jugem = {
 in
 % }}}
 
+
 document (|
         title = {Enumitem パッケージ};
         author = {\@monaqa};
@@ -111,6 +138,16 @@ document (|
         header-footer = ArticleJa.normalHF;
         fonts = ArticleJa.fonts;
 |) '<
+   +section{Todo}<
+     +todo-list{
+       * ほげほげ
+       * ふがふが \done;
+       * ほげほげ
+         ** ほげほげ
+       * ほげほげ
+     }
+     
+   >
   +section{Enumitem パッケージの概要}<
     % ここで基本的な使い方を示す．
     % \genlisting(label-arabic-dot){}

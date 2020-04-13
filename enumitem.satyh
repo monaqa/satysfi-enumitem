@@ -2,6 +2,7 @@
 % vim:foldmethod=marker:
 @require: gr
 @require: color
+@import: param
 
 let-rec power-float-int r m =
   match m with
@@ -67,10 +68,16 @@ module Enumitem : sig
   val to-Alph  : int -> inline-text
 
   % item flag
-  val item-flag : context -> bool
-  direct \set-flag : [] inline-cmd
-  direct \get-item-it : [] inline-cmd
-  direct \set-item-it : [inline-text] inline-cmd
+  direct \setitem : ['a Param.t; 'a] inline-cmd
+  % 指定したパラメータを extended itemize で使えるようにする．
+  val make-param : 'a -> 'a Param.t
+
+  % params
+  val item-indent-ratio : float Param.t
+  val item-gap-ratio : float Param.t
+  val item-gap-outer-ratio : float Param.t
+  val font-shrink-ratio : float Param.t
+  val minimal-font-ratio : float Param.t
 
 end = struct
 
@@ -78,22 +85,27 @@ end = struct
   let concat-blocks = (+++>) block-nil
   let len-max l1 l2 = if l1 >' l2 then l1 else l2
 
-  let item-indent-ratio = 1.5
-  let item-gap-ratio = 0.75
-  let item-gap-outer-ratio = 0.3
-  let font-shrink-ratio = 1.00
-  let minimal-font-ratio = 1.00
+  let item-indent-ratio = Param.make 1.5
+  let item-gap-ratio = Param.make 0.75
+  let item-gap-outer-ratio = Param.make 0.3
+  let font-shrink-ratio = Param.make 1.00
+  let minimal-font-ratio = Param.make 1.00
 
-  % ad hoc 注意！
   % read-inline を経由することにより，
   % item-flag による flag の値の取得を強制的に遅延評価っぽくしている．
-  let-mutable item-flag-it-ref <- {}
-  let item-flag ctx = (get-natural-width (read-inline ctx !item-flag-it-ref) >' 0pt)
-  let-inline ctx \set-flag = let () = item-flag-it-ref <- {xxx} in inline-nil
+  let-inline ctx \reset-param param = let () = Param.discard param in inline-nil
+  let-inline ctx \setitem param value = let () = param |> Param.set value in inline-nil
 
-  let-mutable item-it-ref <- {}
-  let-inline \get-item-it = !item-it-ref
-  let-inline ctx \set-item-it it = let () = item-it-ref <- it in inline-nil
+  % この param-lst に格納されている inline-text を
+  % read-inline するとパラメータがリセットされる
+  let param-lst = Param.make []
+
+  % make-param は itemize 内で使えるパラメータを作成し，
+  % param-lst にリセット用のパラメータを登録する関数
+  let make-param init-value =
+    let param = Param.make init-value in
+    let () = param-lst |> Param.set ({\reset-param(param);} :: Param.get param-lst) in
+    param
 
   % genlisting command {{{
 
@@ -101,7 +113,7 @@ end = struct
     | index ctx idxrules depth (Item(parent, children)) =
         % フォント関係の設定
         let base-font-size = get-font-size ctx in
-        let shrink-ratio = max-float (power-float-int font-shrink-ratio depth) minimal-font-ratio in
+        let shrink-ratio = max-float (power-float-int (Param.get font-shrink-ratio) depth) (Param.get minimal-font-ratio) in
         let item-font-size = base-font-size *' shrink-ratio in
         let ctx-item = ctx
           |> set-font-size item-font-size
@@ -109,16 +121,15 @@ end = struct
 
         % フラグ系は general-list-item では使えない．
         % すべてリセット
-        let () = item-flag-it-ref <- {} in
-        let () = item-it-ref <- {} in
+        let _ = List.map (read-inline ctx) (Param.get param-lst) in
 
         % index の inline box
         let ib-index = idxrules depth ctx-item index in
 
         % index の幅を計算
         let index-width = get-natural-width ib-index in
-        let item-gap = base-font-size *' item-gap-ratio in
-        let parent-indent = base-font-size *' (item-indent-ratio *. (float depth)) in
+        let item-gap = base-font-size *' (Param.get item-gap-ratio) in
+        let parent-indent = base-font-size *' ((Param.get item-indent-ratio) *. (float depth)) in
 
         % 本文の inline-box. embed-block-top で作る．
         % 幅は index-width のぶん狭くなる
@@ -146,7 +157,7 @@ end = struct
     | index ctx idxrules depth (Item(parent, children)) =
         % フォント関係の設定
         let base-font-size = get-font-size ctx in
-        let shrink-ratio = max-float (power-float-int font-shrink-ratio depth) minimal-font-ratio in
+        let shrink-ratio = max-float (power-float-int (Param.get font-shrink-ratio) depth) (Param.get minimal-font-ratio) in
         let item-font-size = base-font-size *' shrink-ratio in
         let ctx-item = ctx
           |> set-font-size item-font-size
@@ -162,8 +173,8 @@ end = struct
 
         % index の幅を計算
         let index-width = get-natural-width ib-index in
-        let item-gap = base-font-size *' item-gap-ratio in
-        let parent-indent = base-font-size *' (item-indent-ratio *. (float depth)) in
+        let item-gap = base-font-size *' (Param.get item-gap-ratio) in
+        let parent-indent = base-font-size *' ((Param.get item-indent-ratio) *. (float depth)) in
 
         % 本文の inline-box. embed-block-top で作る．
         % 幅は index-width のぶん狭くなる
@@ -176,8 +187,8 @@ end = struct
         in
 
         % item-flag-ref 及び item-it-ref について，起きてしまった副作用をリセットする．
-        let () = item-flag-it-ref <- {} in
-        let () = item-it-ref <- {} in
+        let _ = List.map (read-inline ctx) (Param.get param-lst) in
+
 
         % index と text をあわせたものが parent の block-box になる
         let bb-parent =
@@ -194,13 +205,13 @@ end = struct
 
   let general-list-extend ctx idxrules (Item(_, itmzlst)) =
     let base-font-size = get-font-size ctx in
-    let item-gap-outer = base-font-size *' item-gap-outer-ratio in
+    let item-gap-outer = base-font-size *' (Param.get item-gap-outer-ratio) in
     let bblst = List.mapi (fun i -> general-list-item-extend (i + 1) ctx idxrules 0) itmzlst in
       (concat-blocks bblst)
 
   let general-list ctx idxrules (Item(_, itmzlst)) =
     let base-font-size = get-font-size ctx in
-    let item-gap-outer = base-font-size *' item-gap-outer-ratio in
+    let item-gap-outer = base-font-size *' (Param.get item-gap-outer-ratio) in
     let bblst = List.mapi (fun i -> general-list-item (i + 1) ctx idxrules 0) itmzlst in
       (concat-blocks bblst)
 

@@ -6,6 +6,7 @@
   (version "1.1.0")
   (sources
     (
+     (package "param.satyh" "./param.satyh")
      (package "enumitem.satyh" "./enumitem.satyh")))
   (opam "satysfi-enumitem.opam")
   (dependencies ())
