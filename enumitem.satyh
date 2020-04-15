@@ -19,31 +19,27 @@ module Enumitem : sig
   %     context: context of text (and child)
   direct +genlisting : [(int -> int -> context -> inline-boxes);
                         (int -> context -> context); itemize] block-cmd
-  % direct +xgenlisting : [(int -> int -> context -> inline-boxes);
-  %                        (int -> context -> context); itemize] block-cmd
-  % direct \genlisting : [(int -> int -> context -> inline-boxes);
-  %                       (int -> context -> context); itemize] block-cmd
-  % direct \xgenlisting : [(int -> int -> context -> inline-boxes);
-  %                        (int -> context -> context); itemize] block-cmd
-  %
-  % direct \listing-from-block : [block-text] inline-cmd
+  direct +xgenlisting : [(int -> int -> context -> inline-boxes);
+                         (int -> context -> context); itemize] block-cmd
+
+  direct \listing-from-block : [block-text] inline-cmd
 
   % gendescription command
-  % direct +gendescription : ['a; itemize] block-cmd
-  %   constraint 'a :: (|
-  %     % 各アイテムのタイトルと本体の間に改行を挟むか否か．
-  %     nextline : bool;
-  %     % タイトルと本体の間に挿入する空白の幅．
-  %     title-inner-gap : length;
-  %     % 本文のインデント量．タイトルの幅に応じて動的に変えられるようにするため，
-  %     % 「タイトルの幅 (title-inner-gap 込) を引数として，インデント量を返す関数」
-  %     % を指定する．
-  %     inner-indent : length -> length;
-  %     % タイトルを組むのに用いられる関数．
-  %     % タイトルを太字で組むなどの用途に対応するため．
-  %     % 最も単純なのは `read-inline` をそのまま指定すること．
-  %     title-func : context -> inline-text -> inline-boxes;
-  %   |)
+  direct +gendescription : ['a; itemize] block-cmd
+    constraint 'a :: (|
+      % 各アイテムのタイトルと本体の間に改行を挟むか否か．
+      nextline : bool;
+      % タイトルと本体の間に挿入する空白の幅．
+      title-inner-gap : length;
+      % 本文のインデント量．タイトルの幅に応じて動的に変えられるようにするため，
+      % 「タイトルの幅 (title-inner-gap 込) を引数として，インデント量を返す関数」
+      % を指定する．
+      inner-indent : length -> length;
+      % タイトルを組むのに用いられる関数．
+      % タイトルを太字で組むなどの用途に対応するため．
+      % 最も単純なのは `read-inline` をそのまま指定すること．
+      title-func : context -> inline-text -> inline-boxes;
+    |)
   %
   % direct \gendescription : ['a; itemize] inline-cmd
   %   constraint 'a :: (|
@@ -52,26 +48,6 @@ module Enumitem : sig
   %     inner-indent : length -> length;
   %     title-func : context -> inline-text -> inline-boxes;
   %   |)
-  %
-  % direct +description : [itemize] block-cmd
-  % direct \description : [itemize] inline-cmd
-
-  % % text mapping command
-  % val to-arabic: int -> inline-text
-  % val to-roman : int -> inline-text
-  % val to-Roman : int -> inline-text
-  % val to-alph  : int -> inline-text
-  % val to-Alph  : int -> inline-text
-  %
-  % % index decolation command (ordered)
-  % val label-raw     : (int -> inline-text) -> int -> context -> inline-boxes
-  % val label-dot     : (int -> inline-text) -> int -> context -> inline-boxes
-  % val label-paren   : (int -> inline-text) -> int -> context -> inline-boxes
-  % val label-bracket : (int -> inline-text) -> int -> context -> inline-boxes
-  %
-  % % index decolation command (unordered)
-  % val label-bullet       : context -> inline-boxes
-  % val label-white-bullet : context -> inline-boxes
 
   % item-local parameters
   val make-item-local-param : 'a -> 'a Param.t
@@ -116,7 +92,8 @@ end = struct
     fsize *' ((Param.get item-indent-ratio) *. (float depth))
 
   let-rec genitem idxf textf depth idx ctx (Item(parent, children)) =
-    % フラグ周りのリセット
+
+    % フラグ周りは使わないのでリセット
     let _ = List.map (read-inline ctx) (Param.get param-lst) in
 
     % 親の context を評価
@@ -144,12 +121,58 @@ end = struct
 
     bb-parent +++> bblst-children
 
+  let-rec genitem-extended idxf textf depth idx ctx (Item(parent, children)) =
+
+    % ここで先に parent の内容を read-inline しておく．
+    % そうすることで， parent の it の中のコマンドを評価し，
+    % 副作用がある場合は予め走らせておく！
+    let _ = read-inline ctx parent in
+
+    % 親の context を評価
+    let ctx-parent = textf depth ctx in
+
+    % 親の block-boxes を作成
+    let bb-parent =
+      let ib-idx = idxf depth idx ctx in
+      let parent-indent = calc-parent-indent ctx depth in
+      let ib-parent-text =
+        let index-width = get-natural-width ib-idx in
+        let item-text-width = ((get-text-width ctx) -' parent-indent -' index-width) in
+        embed-block-top ctx-parent item-text-width (fun ctx ->
+          line-break true true ctx (read-inline ctx parent ++ inline-fil)
+        )
+      in
+      line-break true true ctx-parent
+        ((inline-skip parent-indent) ++ ib-idx ++ ib-parent-text)
+    in
+
+    % 起きてしまった副作用のリセット
+    let _ = List.map (read-inline ctx) (Param.get param-lst) in
+
+    % 子の block-boxes を作成
+    let bblst-children = List.mapi (
+      fun i -> genitem-extended idxf textf (depth + 1) (i + 1) ctx-parent
+    ) children in
+
+    bb-parent +++> bblst-children
+
+
   % }}}
 
   % general listing command {{{
+
+  let-inline ctx \listing-from-block block-listing =
+    let ib-block = embed-block-breakable ctx (read-block ctx '<#block-listing;>) in
+    inline-fil ++ ib-block ++ omit-skip-after
+
   let-block ctx +genlisting idxf textf lsting =
     let (Item(_, itmzlst)) = lsting in
     let bblst = List.mapi (fun i -> genitem idxf textf 0 (i + 1) ctx) itmzlst in
+      (concat-blocks bblst)
+
+  let-block ctx +xgenlisting idxf textf lsting =
+    let (Item(_, itmzlst)) = lsting in
+    let bblst = List.mapi (fun i -> genitem-extended idxf textf 0 (i + 1) ctx) itmzlst in
       (concat-blocks bblst)
 
   % }}}
@@ -160,8 +183,329 @@ end = struct
 
   % description command {{{
 
-  % }}}
+  let desc-style-nextline record ctx title innerlst =
+    % margin に関する数値
+    let fsize = get-font-size ctx in
+    let gap-inner-item = fsize *' 0.5 in  % 標準の行送りと揃える
+    let gap-between-item = fsize *' 0.7 in
 
+    let ib-title = record#title-func ctx title in
+    let bb-title =
+      let ctx-adjmgn = ctx |> set-paragraph-margin gap-between-item gap-inner-item in
+      line-break true false ctx-adjmgn ib-title
+    in
+
+    let bb-inner-func ctx =
+      concat-blocks (
+        List.map (fun it -> line-break true true ctx ((read-inline ctx it) ++ inline-fil))
+          innerlst
+      )
+    in
+
+    let box-inner =
+      let title-wid = get-natural-width ib-title +' record#title-inner-gap in
+      let indent = record#inner-indent title-wid in
+      let box-width = (get-text-width ctx) -' indent in
+      let ctx-inner = ctx |> set-paragraph-margin gap-inner-item gap-inner-item in
+      let ib-inner = embed-block-top ctx-inner box-width bb-inner-func in
+      let ctx-adjmgn = ctx |> set-paragraph-margin gap-inner-item gap-between-item in
+      line-break false true ctx-adjmgn (inline-skip indent ++ ib-inner)
+    in
+
+    bb-title +++ box-inner
+
+  let desc-style-nonextline record ctx title innerlst =
+    % margin に関する数値
+    let fsize = get-font-size ctx in
+    let gap-inner-item = fsize *' 0.7 in  % 標準の行送りと揃える
+    let gap-between-item = fsize *' 1.0 in
+    let ctx-adjmgn = ctx |> set-paragraph-margin gap-between-item gap-between-item in
+
+    % 「インデント幅」 の width を持つ inline-boxes として ib-title を作成
+    let ib-title = record#title-func ctx title in
+    let (wid-title, ht-title, dp-title) = get-natural-metrics ib-title in
+    let inner-indent = record#inner-indent (wid-title +' record#title-inner-gap) in
+    let ib-title-box =
+      inline-graphics inner-indent ht-title dp-title
+        (fun (x, y) -> [draw-text (x, y) ib-title])
+    in
+
+    let bb-inner-func ctx =
+      let first-indent idx =
+        if idx == 0 then
+          len-max (wid-title -' inner-indent +' record#title-inner-gap) 0pt
+        else 0pt
+      in
+      concat-blocks (
+        List.mapi (
+          fun idx it ->
+            line-break true true ctx
+              ((inline-skip (first-indent idx)) ++ (read-inline ctx it) ++ inline-fil)
+        )
+          innerlst
+      )
+    in
+
+    let box-width = (get-text-width ctx) -' inner-indent in
+    let ctx-inner = ctx |> set-paragraph-margin gap-inner-item gap-inner-item in
+    let ib-inner = embed-block-top ctx-inner box-width bb-inner-func in
+    let ctx-adjmgn = ctx |> set-paragraph-margin gap-inner-item gap-between-item in
+
+    line-break false true ctx-adjmgn (ib-title-box ++ ib-inner)
+
+  let desc-item record ctx (Item(title, itmzlst)) =
+    let innerlst = List.map (fun (Item(text, _)) -> text) itmzlst in
+    if record#nextline then
+      desc-style-nextline record ctx title innerlst
+    else
+      % not implemented
+      desc-style-nonextline record ctx title innerlst
+
+  let description record ctx (Item(_, itmzlst)) =
+    let bblst = List.map (desc-item record ctx) itmzlst in
+      (concat-blocks bblst)
+
+  let-block ctx +gendescription record item = description record ctx item
+
+  let-block +description item = '<
+    +gendescription(|
+      nextline = true;
+      title-inner-gap = 5pt;
+      inner-indent = (fun title-wid -> 20pt);
+      title-func = read-inline;
+    |)(item);
+  >
+
+  let-inline \gendescription record item = {\listing-from-block<+gendescription(record)(item);>}
+  let-inline \description item = {\listing-from-block<+description(item);>}
+
+  % }}}
 end
 
-% Aliases
+% decolation functions
+module EnumitemLabel : sig
+
+  % text mapping function
+  val to-arabic: int -> inline-text
+  val to-roman : int -> inline-text
+  val to-Roman : int -> inline-text
+  val to-alph  : int -> inline-text
+  val to-Alph  : int -> inline-text
+
+  % index decolation function (ordered)
+  val raw     : (int -> inline-text) -> int -> context -> inline-boxes
+  val dot     : (int -> inline-text) -> int -> context -> inline-boxes
+  val paren   : (int -> inline-text) -> int -> context -> inline-boxes
+  val bracket : (int -> inline-text) -> int -> context -> inline-boxes
+
+  % index decolation function (unordered)
+  val shape-bullet       : context -> inline-boxes
+  val shape-white-bullet : context -> inline-boxes
+
+  % label function
+  val raw-arabic     : int -> int -> context -> inline-boxes
+  val raw-roman      : int -> int -> context -> inline-boxes
+  val raw-Roman      : int -> int -> context -> inline-boxes
+  val raw-alph       : int -> int -> context -> inline-boxes
+  val raw-Alph       : int -> int -> context -> inline-boxes
+  val dot-arabic     : int -> int -> context -> inline-boxes
+  val dot-roman      : int -> int -> context -> inline-boxes
+  val dot-Roman      : int -> int -> context -> inline-boxes
+  val dot-alph       : int -> int -> context -> inline-boxes
+  val dot-Alph       : int -> int -> context -> inline-boxes
+  val paren-arabic   : int -> int -> context -> inline-boxes
+  val paren-roman    : int -> int -> context -> inline-boxes
+  val paren-Roman    : int -> int -> context -> inline-boxes
+  val paren-alph     : int -> int -> context -> inline-boxes
+  val paren-Alph     : int -> int -> context -> inline-boxes
+  val bracket-arabic : int -> int -> context -> inline-boxes
+  val bracket-roman  : int -> int -> context -> inline-boxes
+  val bracket-Roman  : int -> int -> context -> inline-boxes
+  val bracket-alph   : int -> int -> context -> inline-boxes
+  val bracket-Alph   : int -> int -> context -> inline-boxes
+  val bullet         : int -> int -> context -> inline-boxes
+  val white-bullet   : int -> int -> context -> inline-boxes
+
+  % text decolation function
+  val text-normal : int -> context -> context
+
+  % default commands
+  direct +listing    : [itemize] block-cmd
+  direct +enumerate  : [itemize] block-cmd
+  direct +description: [itemize] block-cmd
+  direct \listing    : [itemize] inline-cmd
+  direct \enumerate  : [itemize] inline-cmd
+  direct \description: [itemize] inline-cmd
+
+end = struct
+
+  % text mapping {{{
+
+  let num-to-roman-char capital num =
+    let unic-point = match num with
+      |  1 -> 0x0049  % `I`
+      |  5 -> 0x0056  % `V`
+      | 10 -> 0x0058  % `X`
+      |  _ -> 0x003F  % `?`
+    in
+    if capital then unic-point else unic-point + 0x20
+
+  let roman-seq num = match num with
+    |  1 -> [ 1;                 ] % i
+    |  2 -> [ 1;  1;             ] % ii
+    |  3 -> [ 1;  1;  1;         ] % iii
+    |  4 -> [ 1;  5;             ] % iv
+    |  5 -> [ 5;                 ] % v
+    |  6 -> [ 5;  1;             ] % vi
+    |  7 -> [ 5;  1;  1;         ] % vii
+    |  8 -> [ 5;  1;  1;  1;     ] % viii
+    |  9 -> [ 1; 10;             ] % ix
+    | 10 -> [10;                 ] % x
+    | 11 -> [10;  1;             ] % xi
+    | 12 -> [10;  1;  1;         ] % xii
+    | 13 -> [10;  1;  1;  1;     ] % xiii
+    | 14 -> [10;  1;  5;         ] % xiv
+    | 15 -> [10;  5;             ] % xv
+    | 16 -> [10;  5;  1;         ] % xvi
+    | 17 -> [10;  5;  1;  1;     ] % xvii
+    | 18 -> [10;  5;  1;  1;  1; ] % xviii
+    | 19 -> [10;  1; 10;         ] % xix
+    | 20 -> [10; 10;             ] % xx
+    | 21 -> [10; 10;  1;         ] % xxi
+    | 22 -> [10; 10;  1;  1;     ] % xxii
+    | 23 -> [10; 10;  1;  1;  1; ] % xxiii
+    | 24 -> [10; 10;  1;  5;     ] % xxiv
+    | 25 -> [10; 10;  5;         ] % xxv
+    |  _ -> [ 0;  0;             ] % ??
+
+  let to-arabic num = embed-string (arabic num)
+
+  let to-roman num =
+    embed-string
+      (string-unexplode
+        (List.map (fun i -> num-to-roman-char false i) (roman-seq num)))
+  let to-Roman num =
+    embed-string
+      (string-unexplode
+        (List.map (fun i -> num-to-roman-char true i) (roman-seq num)))
+
+  let to-alph num = embed-string (string-unexplode [num + 0x0060;])
+  let to-Alph num = embed-string (string-unexplode [num + 0x0040;])
+
+  % }}}
+
+  % index decolation {{{
+
+  let label-width-ratio = 2.0  % ラベル幅: item-indent からラベル幅だけシフトした場所から本文が始まる
+
+  let raw num-format idx ctx =
+    let label-width = (get-font-size ctx) *' label-width-ratio in
+    let it-num = num-format idx in
+    let ib-label = read-inline ctx {#it-num;\ } in
+    let (wid-label, _, _) = get-natural-metrics ib-label in
+    inline-skip (label-width -' wid-label) ++ ib-label
+
+  let dot num-format idx ctx =
+    let label-width = (get-font-size ctx) *' label-width-ratio in
+    let it-num = num-format idx in
+    let ib-label = read-inline ctx {#it-num;.\ } in
+    let (wid-label, _, _) = get-natural-metrics ib-label in
+    inline-skip (label-width -' wid-label) ++ ib-label
+
+  let paren num-format idx ctx =
+    let label-width = (get-font-size ctx) *' label-width-ratio in
+    let it-num = num-format idx in
+    let ib-label = read-inline ctx {(#it-num;)\ } in
+    let (wid-label, _, _) = get-natural-metrics ib-label in
+    inline-skip (label-width -' wid-label) ++ ib-label
+
+  let bracket num-format idx ctx =
+    let label-width = (get-font-size ctx) *' label-width-ratio in
+    let it-num = num-format idx in
+    let ib-label = read-inline ctx {[#it-num;]\ } in
+    let (wid-label, _, _) = get-natural-metrics ib-label in
+    inline-skip (label-width -' wid-label) ++ ib-label
+
+
+  let shape-bullet ctx =
+    let font-size = get-font-size ctx in
+    let label-width = font-size *' label-width-ratio in
+    let interval = font-size *' 0.3 in
+    let circ ctx (x, y) =
+      let cx = x +' label-width -' (font-size *' 0.3) -' interval in
+      let cy = y +' font-size *' 0.3 in
+      let r = font-size *' 0.15 in
+      Gr.circle (cx, cy) r
+    in
+    inline-graphics label-width 8pt 0pt
+      (fun (x, y) -> [fill Color.black (circ ctx (x, y))])
+
+  let shape-white-bullet ctx =
+    let font-size = get-font-size ctx in
+    let label-width = font-size *' label-width-ratio in
+    let interval = font-size *' 0.3 in
+    let circ ctx (x, y) =
+      let cx = x +' label-width -' (font-size *' 0.3) -' interval in
+      let cy = y +' font-size *' 0.3 in
+      let r = font-size *' 0.12 in
+      Gr.circle (cx, cy) r
+    in
+    inline-graphics label-width 8pt 0pt
+      (fun (x, y) -> [stroke 1pt Color.black (circ ctx (x, y))])
+
+  % }}}
+
+  let raw-arabic _ = raw to-arabic
+  let raw-roman  _ = raw to-roman
+  let raw-Roman  _ = raw to-Roman
+  let raw-alph   _ = raw to-alph
+  let raw-Alph   _ = raw to-Alph
+
+  let dot-arabic _ = dot to-arabic
+  let dot-roman  _ = dot to-roman
+  let dot-Roman  _ = dot to-Roman
+  let dot-alph   _ = dot to-alph
+  let dot-Alph   _ = dot to-Alph
+
+  let paren-arabic _ = paren to-arabic
+  let paren-roman  _ = paren to-roman
+  let paren-Roman  _ = paren to-Roman
+  let paren-alph   _ = paren to-alph
+  let paren-Alph   _ = paren to-Alph
+
+  let bracket-arabic _ = bracket to-arabic
+  let bracket-roman  _ = bracket to-roman
+  let bracket-Roman  _ = bracket to-Roman
+  let bracket-alph   _ = bracket to-alph
+  let bracket-Alph   _ = bracket to-Alph
+
+  let bullet _ _ = shape-bullet
+  let white-bullet _ _ = shape-white-bullet
+
+  let text-normal _ ctx = ctx  % do nothing
+
+  let-block +listing item = '<+genlisting(bullet)(text-normal)(item);>
+
+  let default-enum-rule depth =
+    match depth with
+    | 0 -> dot to-arabic
+    | 1 -> dot to-roman
+    | 2 -> paren to-arabic
+    | _ -> raw to-arabic
+
+  let-block +enumerate item = '< +genlisting(default-enum-rule)(text-normal)(item); >
+
+  let-block +description item = '<
+    +gendescription(|
+      nextline = true;
+      title-inner-gap = 5pt;
+      inner-indent = (fun title-wid -> 20pt);
+      title-func = read-inline;
+    |)(item);
+  >
+
+  let-inline \listing item     = {\listing-from-block<+listing(item);>}
+  let-inline \enumerate item   = {\listing-from-block<+enumerate(item);>}
+  let-inline \description item = {\listing-from-block<+description(item);>}
+
+end
