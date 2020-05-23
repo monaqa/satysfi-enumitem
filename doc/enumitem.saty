@@ -9,24 +9,27 @@
 @require: hdecoset
 @import: ../enumitem
 
-open EnumitemLabel
+open Enumitem
 
 % custom labels {{{
-let nrw-mgn depth ctx =
+
+let narrow-margin ctx =
   let fsize = get-font-size ctx in
-  ctx |> set-paragraph-margin fsize fsize
-let-block +listing item = '<+genlisting(bullet)(nrw-mgn)(item);>
-  let-inline \listing item     = {\listing-from-block<+listing(item);>}
+  let ctx-new = ctx |> set-paragraph-margin fsize fsize in
+    default-item ctx-new
+
+let-block +listing item = '<+genlisting(bullet)(narrow-margin)(item);>
+let-inline \listing item     = {\listing-from-block<+listing(item);>}
 
 let-block +example str bt = '<
   +code(str);
   #bt;
 >
 
-let tmp-label = Enumitem.make-item-local-param bullet
+let tmp-label = EnumitemBase.make-item-local-param bullet
 let-inline \label labelf = {\set-item(tmp-label)(labelf);}
 let-block +label-demo item = '<
-  +xgenlisting(fun depth idx ctx -> (Param.get tmp-label) depth idx ctx)(text-normal)(item);
+  +xgenlisting(fun depth idx ctx -> (Param.get tmp-label) depth idx ctx)(default-item)(item);
 >
 
 let square-label is-checked ctx =
@@ -49,13 +52,13 @@ let square-label is-checked ctx =
   in
   inline-skip 10pt ++ (inline-graphics fsize fsize 0pt gr)
 
-let done = Enumitem.make-item-local-param false
+let done = EnumitemBase.make-item-local-param false
 let-inline \done = {\set-item(done)(true);}
 let-block +todo-list item = '<
-  +xgenlisting(fun depth idx ctx -> square-label (Param.get done) ctx)(nrw-mgn)(item);
+  +xgenlisting(fun depth idx ctx -> square-label (Param.get done) ctx)(narrow-margin)(item);
 >
 
-let hoge = Enumitem.make-item-local-param {hoge}
+let hoge = EnumitemBase.make-item-local-param {hoge}
 
 let-inline \jugem = {
 寿限無，寿限無，五劫のすりきれ，
@@ -210,7 +213,7 @@ document (|
       }
 
       +example(```
-      +genlisting(EnumitemLabel.dot-arabic)(EnumitemLabel.text-normal){
+      +genlisting(Enumitem.dot-arabic)(Enumitem.default-item){
         * hoge
           ** hoge1
           ** hoge2
@@ -218,7 +221,7 @@ document (|
         * piyo
       }
       ```)<
-        +genlisting(EnumitemLabel.dot-arabic)(EnumitemLabel.text-normal){
+        +genlisting(Enumitem.dot-arabic)(Enumitem.default-item){
           * hoge
             ** hoge1
             ** hoge2
@@ -231,10 +234,10 @@ document (|
         このように，アラビア数字 + ドット をラベルに持つような箇条書きが生成されました．
         `+genlisting` は `+genlisting(labelf)(textf){item}` という形で使用します．
         第1引数の `labelf` はラベルの\textbf{スタイル指定子}であり，
-        `EnumitemLabel` モジュールでは `dot-arabic` をはじめとして20種類以上が予め定義されています．
+        `Enumitem` モジュールでは `dot-arabic` をはじめとして20種類以上が予め定義されています．
         またその実態は単なる関数ですから，ユーザの手で自由に作成することもできます（詳細は後述）．
         `textf` は本文の \textbf{テキスト処理文脈指定子} であり，
-        こちらも `text-normal` という指定子が `EnumitemLabel` モジュールで定義されています．
+        こちらも `default-item` という指定子が `Enumitem` モジュールで定義されています．
       }
 
       +p{
@@ -244,7 +247,7 @@ document (|
       }
 
       +example(```
-      +genlisting(EnumitemLabel.white-bullet)(EnumitemLabel.text-normal){
+      +genlisting(Enumitem.white-bullet)(Enumitem.default-item){
           * hoge
             ** hoge1
             ** hoge2
@@ -252,7 +255,7 @@ document (|
           * piyo
         }
       ```)<
-        +genlisting(EnumitemLabel.white-bullet)(EnumitemLabel.text-normal){
+        +genlisting(Enumitem.white-bullet)(Enumitem.default-item){
           * hoge
             ** hoge1
             ** hoge2
@@ -262,16 +265,16 @@ document (|
       >
 
       +p{
-        なお，上の例では `white-bullet` などの指定子名に `EnumitemLabel` を付けていますが，
+        なお，上の例では `white-bullet` などの指定子名に `Enumitem` を付けていますが，
         実際のマークアップでいちいちこれらを書くのは鬱陶しいかもしれません．
-        このような場合，`EnumitemLabel` モジュールを open することで
+        このような場合，`Enumitem` モジュールを open することで
         名前空間を省略することができます．
       }
 
       +code(```
       @require: enumitem
 
-      open EnumitemLabel
+      open Enumitem
 
       in
       document(| 中略 |)<
@@ -280,8 +283,8 @@ document (|
       ```);
 
       +p{
-        このように書くと， `EnumitemLabel` モジュール内で定義された `raw-arabic` などの関数を
-        `EnumitemLabel.raw-arabic` と書かずに直接使えるようになります．
+        このように書くと， `Enumitem` モジュール内で定義された `raw-arabic` などの関数を
+        `Enumitem.raw-arabic` と書かずに直接使えるようになります．
         ただし他のパッケージやユーザで定義した関数名と衝突しないようにするのは使用者の責任となります．
         パッケージを読み込むだけで関数名が衝突するという事態を避けるため，
         open しない限りモジュール名を省略できないようにしています．
@@ -290,14 +293,14 @@ document (|
 
     +subsection{指定子一覧}<
       +p{
-        以下は， `EnumitemLabel` モジュール内で定義されているスタイル指定子の一覧です．
+        以下は， `Enumitem` モジュール内で定義されているスタイル指定子の一覧です．
         番号付きの箇条書きには以下の指定子を使用できます．
       }
 
       +xgenlisting(
         % \label コマンドで指定した指定子を用いる（デフォルトは bullet）
         fun depth idx ctx -> (Param.get tmp-label) depth idx ctx
-      )(nrw-mgn){
+      )(narrow-margin){
         * アラビア数字系
 
           ** \code(`raw-arabic`); \label(raw-arabic);
@@ -332,7 +335,7 @@ document (|
         また，番号の無い箇条書きには以下の指定子を使用できます．
       }
 
-      +xgenlisting(fun depth idx ctx -> (Param.get tmp-label) depth idx ctx)(nrw-mgn){
+      +xgenlisting(fun depth idx ctx -> (Param.get tmp-label) depth idx ctx)(narrow-margin){
         * \code(`bullet`); \label(bullet);
         * \code(`white-bullet`); \label(white-bullet);
       }
@@ -353,7 +356,7 @@ document (|
         たとえば，以下のような To-Do リストを作成したくなったとします．
       }
       +todo-list{
-        * ミルクを買う．\footnote{ほんとに？}
+        * ミルクを買う．
         * The \SATySFi;book を読む．
         * \done; \SATySFi; を完全に理解する．
         * 課題を解く．
@@ -403,7 +406,7 @@ document (|
           | _ -> false
         in
         square-label checked ctx
-      ))(text-normal){
+      ))(default-item){
         * ミルクを買う．
         * The \SATySFi;book を読む．
         * \SATySFi; を完全に理解する．
@@ -432,12 +435,12 @@ document (|
       }
 
       +code(```
-        let done = Enumitem.make-item-local-param false
+        let done = EnumitemBase.make-item-local-param false
         let-inline \done = {\set-item(done)(true);}
         let-block +todo-list item = '<
           +xgenlisting(
             fun depth idx ctx -> square-label (Param.get done) ctx
-          )(nrw-mgn)(item);
+          )(default-item)(item);
         >
       ```);
       
@@ -530,6 +533,12 @@ document (|
   +section{`+gendescription` コマンド}<
 
     +p{工事中}
+
+    +xlisting(paren-roman)(default-item){
+      * ああああ
+      * いいいいい \hide;
+      * えええええ
+    }
 
   >
 

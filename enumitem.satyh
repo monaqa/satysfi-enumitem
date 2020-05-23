@@ -4,23 +4,26 @@
 @require: color
 @import: param
 
-module Enumitem : sig
+type label = int -> int -> context -> inline-boxes
+type itemfmt = context -> int -> inline-boxes -> inline-text -> block-boxes
+% type textfmt = int -> context -> context
+
+module EnumitemBase : sig
 
   % genlisting command
-  % +genlisting(idxf)(textf){* items}
-  % idxf: int -> int -> context -> inline-boxes
-  %     int: depth
-  %     int: index
+  % +genlisting(labelf)(itemf){* items}
+  % labelf: label (int -> int -> context -> inline-boxes)
+  %     int: depth (0-based indexing)
+  %     int: index of item (1-based indexing)
   %     context: *parent* context
   %     inline-boxes: inline boxes of label
-  % textf: int -> context -> context
-  %     int: depth
-  %     context: *parent* context
-  %     context: context of text (and child)
-  direct +genlisting : [(int -> int -> context -> inline-boxes);
-                        (int -> context -> context); itemize] block-cmd
-  direct +xgenlisting : [(int -> int -> context -> inline-boxes);
-                         (int -> context -> context); itemize] block-cmd
+  % itemf : itemfmt (context -> int -> inline-boxes -> inline-boxes -> inline-boxes)
+  %     context: parent context
+  %     int: depth (0-based indexing)
+  %     inline-boxes: inline boxes of label
+  %     inline-boxes: inline boxes of parent text
+  direct +genlisting : [label; itemfmt; itemize] block-cmd
+  direct +xgenlisting : [label; itemfmt; itemize] block-cmd
 
   direct \listing-from-block : [block-text] inline-cmd
 
@@ -64,21 +67,17 @@ end = struct
 
   % parameters {{{
 
-  % ひとまずモジュール共通の Param としておく．
-  % ゆくゆくはコマンド引数にレコードの形で指定させるようにするかも
-  let item-indent-ratio = Param.make 1.5
-
   % read-inline を経由することにより，
-  % item-flag による flag の値の取得を強制的に遅延評価っぽくしている．
+  % Param.discard によるvalue のリセットを強制的に遅延評価っぽくしている．
   let-inline ctx \reset-param param = let () = Param.discard param in inline-nil
+
   let-inline ctx \set-item param value = let () = param |> Param.set value in inline-nil
 
-  % この param-lst に格納されている inline-text を
-  % read-inline するとパラメータがリセットされる
+  % この param-lst に格納されている inline-text を read-inline するとパラメータがリセットされる．
   let param-lst = Param.make []
 
-  % make-param は itemize 内で使えるパラメータを作成し，
-  % param-lst にリセット用のパラメータを登録する関数
+  % make-item-local-param は itemize 内で使えるパラメータを作成し，
+  % param-lst にリセット用のコマンドを登録する関数
   let make-item-local-param init-value =
     let param = Param.make init-value in
     let () = param-lst |> Param.set ({\reset-param(param);} :: Param.get param-lst) in
@@ -87,75 +86,46 @@ end = struct
   % }}}
 
   % general listing function {{{
-  let calc-parent-indent ctx depth =
-    let fsize = get-font-size ctx in
-    fsize *' ((Param.get item-indent-ratio) *. (float depth))
 
-  let-rec genitem idxf textf depth idx ctx (Item(parent, children)) =
+  % labelf, itemf, depth, index, context, item が与えられた状態で再帰的に箇条書きを組む．
+  let-rec genitem labelf itemf depth idx ctx (Item(parent, children)) =
 
     % フラグ周りは使わないのでリセット
     let _ = List.map (read-inline ctx) (Param.get param-lst) in
 
-    % 親の context を評価
-    let ctx-parent = textf depth ctx in
-
-    % 親の block-boxes を作成
-    let bb-parent =
-      let ib-idx = idxf depth idx ctx in
-      let parent-indent = calc-parent-indent ctx depth in
-      let ib-parent-text =
-        let index-width = get-natural-width ib-idx in
-        let item-text-width = ((get-text-width ctx) -' parent-indent -' index-width) in
-        embed-block-top ctx-parent item-text-width (fun ctx ->
-          line-break true true ctx (read-inline ctx parent ++ inline-fil)
-        )
-      in
-      line-break true true ctx-parent
-        ((inline-skip parent-indent) ++ ib-idx ++ ib-parent-text)
-    in
+    % 親のラベルと本文を合わせた block-boxes を作成
+    let ib-label = labelf depth idx ctx in
+    let bb-parent = itemf ctx depth ib-label parent in
 
     % 子の block-boxes を作成
     let bblst-children = List.mapi (
-      fun i -> genitem idxf textf (depth + 1) (i + 1) ctx-parent
+      fun i -> genitem labelf itemf (depth + 1) (i + 1) ctx
     ) children in
 
     bb-parent +++> bblst-children
 
-  let-rec genitem-extended idxf textf depth idx ctx (Item(parent, children)) =
+  % labelf, itemf, depth, index, context, item が与えられた状態で再帰的に箇条書きを組む．
+  % item 内で変更された parameter の値を用いることができる．
+  let-rec genitem-extended labelf itemf depth idx ctx (Item(parent, children)) =
 
     % ここで先に parent の内容を read-inline しておく．
     % そうすることで， parent の it の中のコマンドを評価し，
     % 副作用がある場合は予め走らせておく！
     let _ = read-inline ctx parent in
 
-    % 親の context を評価
-    let ctx-parent = textf depth ctx in
-
-    % 親の block-boxes を作成
-    let bb-parent =
-      let ib-idx = idxf depth idx ctx in
-      let parent-indent = calc-parent-indent ctx depth in
-      let ib-parent-text =
-        let index-width = get-natural-width ib-idx in
-        let item-text-width = ((get-text-width ctx) -' parent-indent -' index-width) in
-        embed-block-top ctx-parent item-text-width (fun ctx ->
-          line-break true true ctx (read-inline ctx parent ++ inline-fil)
-        )
-      in
-      line-break true true ctx-parent
-        ((inline-skip parent-indent) ++ ib-idx ++ ib-parent-text)
-    in
+    % 親のラベルと本文を合わせた block-boxes を作成
+    let ib-label = labelf depth idx ctx in
+    let bb-parent = itemf ctx depth ib-label parent in
 
     % 起きてしまった副作用のリセット
     let _ = List.map (read-inline ctx) (Param.get param-lst) in
 
     % 子の block-boxes を作成
     let bblst-children = List.mapi (
-      fun i -> genitem-extended idxf textf (depth + 1) (i + 1) ctx-parent
+      fun i -> genitem-extended labelf itemf (depth + 1) (i + 1) ctx
     ) children in
 
     bb-parent +++> bblst-children
-
 
   % }}}
 
@@ -165,19 +135,15 @@ end = struct
     let ib-block = embed-block-breakable ctx (read-block ctx '<#block-listing;>) in
     inline-fil ++ ib-block ++ omit-skip-after
 
-  let-block ctx +genlisting idxf textf lsting =
+  let-block ctx +genlisting labelf itemf lsting =
     let (Item(_, itmzlst)) = lsting in
-    let bblst = List.mapi (fun i -> genitem idxf textf 0 (i + 1) ctx) itmzlst in
+    let bblst = List.mapi (fun i -> genitem labelf itemf 0 (i + 1) ctx) itmzlst in
       (concat-blocks bblst)
 
-  let-block ctx +xgenlisting idxf textf lsting =
+  let-block ctx +xgenlisting labelf itemf lsting =
     let (Item(_, itmzlst)) = lsting in
-    let bblst = List.mapi (fun i -> genitem-extended idxf textf 0 (i + 1) ctx) itmzlst in
+    let bblst = List.mapi (fun i -> genitem-extended labelf itemf 0 (i + 1) ctx) itmzlst in
       (concat-blocks bblst)
-
-  % }}}
-
-  % decolation/text mapping command {{{
 
   % }}}
 
@@ -283,7 +249,7 @@ end = struct
 end
 
 % decolation functions
-module EnumitemLabel : sig
+module Enumitem : sig
 
   % text mapping function
   val to-arabic: int -> inline-text
@@ -303,31 +269,37 @@ module EnumitemLabel : sig
   val shape-white-bullet : context -> inline-boxes
 
   % label function
-  val raw-arabic     : int -> int -> context -> inline-boxes
-  val raw-roman      : int -> int -> context -> inline-boxes
-  val raw-Roman      : int -> int -> context -> inline-boxes
-  val raw-alph       : int -> int -> context -> inline-boxes
-  val raw-Alph       : int -> int -> context -> inline-boxes
-  val dot-arabic     : int -> int -> context -> inline-boxes
-  val dot-roman      : int -> int -> context -> inline-boxes
-  val dot-Roman      : int -> int -> context -> inline-boxes
-  val dot-alph       : int -> int -> context -> inline-boxes
-  val dot-Alph       : int -> int -> context -> inline-boxes
-  val paren-arabic   : int -> int -> context -> inline-boxes
-  val paren-roman    : int -> int -> context -> inline-boxes
-  val paren-Roman    : int -> int -> context -> inline-boxes
-  val paren-alph     : int -> int -> context -> inline-boxes
-  val paren-Alph     : int -> int -> context -> inline-boxes
-  val bracket-arabic : int -> int -> context -> inline-boxes
-  val bracket-roman  : int -> int -> context -> inline-boxes
-  val bracket-Roman  : int -> int -> context -> inline-boxes
-  val bracket-alph   : int -> int -> context -> inline-boxes
-  val bracket-Alph   : int -> int -> context -> inline-boxes
-  val bullet         : int -> int -> context -> inline-boxes
-  val white-bullet   : int -> int -> context -> inline-boxes
+  val raw-arabic     : label
+  val raw-roman      : label
+  val raw-Roman      : label
+  val raw-alph       : label
+  val raw-Alph       : label
+  val dot-arabic     : label
+  val dot-roman      : label
+  val dot-Roman      : label
+  val dot-alph       : label
+  val dot-Alph       : label
+  val paren-arabic   : label
+  val paren-roman    : label
+  val paren-Roman    : label
+  val paren-alph     : label
+  val paren-Alph     : label
+  val bracket-arabic : label
+  val bracket-roman  : label
+  val bracket-Roman  : label
+  val bracket-alph   : label
+  val bracket-Alph   : label
+  val bullet         : label
+  val white-bullet   : label
 
-  % text decolation function
-  val text-normal : int -> context -> context
+  % item constructor
+  val default-item : context -> int -> inline-boxes -> inline-text -> block-boxes
+
+  % label transform
+  % val hide-only-when : bool -> label -> label
+  direct +xlisting : [label; itemfmt; itemize] block-cmd
+  val hidden : bool Param.t
+  direct \hide : [] inline-cmd
 
   % default commands
   direct +listing    : [itemize] block-cmd
@@ -455,6 +427,8 @@ end = struct
 
   % }}}
 
+  % labels {{{
+
   let raw-arabic _ = raw to-arabic
   let raw-roman  _ = raw to-roman
   let raw-Roman  _ = raw to-Roman
@@ -482,9 +456,31 @@ end = struct
   let bullet _ _ = shape-bullet
   let white-bullet _ _ = shape-white-bullet
 
-  let text-normal _ ctx = ctx  % do nothing
 
-  let-block +listing item = '<+genlisting(bullet)(text-normal)(item);>
+  % }}}
+
+  % ひとまずモジュール共通の Param としておく．
+  % ゆくゆくはコマンド引数にレコードの形で指定させるようにするかも
+  let item-indent-ratio = Param.make 1.5
+
+  % 現在の context, 階層の深さ，を指定し，
+  let default-item ctx depth ib-label parent =
+    let parent-indent =
+      let fsize = get-font-size ctx in
+      fsize *' ((Param.get item-indent-ratio) *. (float depth))
+    in
+    let ib-parent-text =
+      let index-width = get-natural-width ib-label in
+      let item-text-width = ((get-text-width ctx) -' parent-indent -' index-width) in
+      embed-block-top ctx item-text-width (fun ctx ->
+        line-break true true ctx (read-inline ctx parent ++ inline-fil)
+      )
+    in
+    line-break true true ctx
+      ((inline-skip parent-indent) ++ ib-label ++ ib-parent-text)
+
+
+  let-block +listing item = '<+genlisting(bullet)(default-item)(item);>
 
   let default-enum-rule depth =
     match depth with
@@ -493,7 +489,7 @@ end = struct
     | 2 -> paren to-arabic
     | _ -> raw to-arabic
 
-  let-block +enumerate item = '< +genlisting(default-enum-rule)(text-normal)(item); >
+  let-block +enumerate item = '< +genlisting(default-enum-rule)(default-item)(item); >
 
   let-block +description item = '<
     +gendescription(|
@@ -507,5 +503,23 @@ end = struct
   let-inline \listing item     = {\listing-from-block<+listing(item);>}
   let-inline \enumerate item   = {\listing-from-block<+enumerate(item);>}
   let-inline \description item = {\listing-from-block<+description(item);>}
+
+  % {{{
+  let hidden = EnumitemBase.make-item-local-param false
+  let-inline \hide = {\EnumitemBase.set-item(hidden)(true);}
+
+  let-block +xlisting labelf itemf item =
+    '<+xgenlisting(
+      fun dpt idx ctx -> (
+        let ib = labelf dpt idx ctx in
+        if (Param.get hidden) then
+          let (wid, ht, dp) = get-natural-metrics ib in
+          inline-graphics wid ht dp (fun (x, y) -> [])
+        else
+          ib
+      )
+    )(itemf)(item);>
+
+  % }}}
 
 end
