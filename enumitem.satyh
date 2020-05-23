@@ -296,11 +296,6 @@ module Enumitem : sig
   % item constructor
   val default-item : context -> int -> inline-boxes -> inline-text -> block-boxes
 
-  % label transform
-  direct +xlisting : [label; itemfmt; itemize] block-cmd
-  direct \nolabel : [] inline-cmd
-  direct \ignore : [] inline-cmd
-
   % default commands
   direct +listing    : [label?; itemize] block-cmd
   direct +enumerate  : [label?; itemize] block-cmd
@@ -515,34 +510,5 @@ end = struct
     | None         -> read-inline ctx {\listing-from-block<+enumerate(item);>}
 
   let-inline \description item = {\listing-from-block<+description(item);>}
-
-  % {{{
-
-  let hide-label = EnumitemBase.make-param false
-  let-inline \nolabel = {\EnumitemBase.set-item(hide-label)(true);}
-
-  let ignore = EnumitemBase.make-param false
-  let-inline \ignore = {\EnumitemBase.set-item(ignore)(true);}
-
-  let-block +xlisting labelf itemf item =
-    '<+xgenlisting(
-      fun dpt idx ctx -> (
-        let ib = labelf dpt idx ctx in
-        if (Param.get hide-label) then
-          let (wid, ht, dp) = get-natural-metrics ib in
-          inline-graphics wid ht dp (fun (x, y) -> [])
-        else
-          ib
-      )
-    )(
-      fun ctx dpt ib-label parent -> (
-        if (Param.get ignore) then
-          block-nil
-        else
-          itemf ctx dpt ib-label parent
-      )
-    )(item);>
-
-  % }}}
 
 end
