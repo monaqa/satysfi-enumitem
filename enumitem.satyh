@@ -1,7 +1,7 @@
 % -*- coding: utf-8 -*-
-% vim:foldmethod=marker:
 @require: gr
 @require: color
+@require: option
 @import: param
 
 type label = int -> int -> context -> inline-boxes
@@ -12,6 +12,7 @@ module EnumitemBase : sig
 
   % genlisting command
   % +genlisting(labelf)(itemf){* items}
+  % +xgenlisting(labelf)(itemf){* items}
   % labelf: label (int -> int -> context -> inline-boxes)
   %     int: depth (0-based indexing)
   %     int: index of item (1-based indexing)
@@ -53,7 +54,7 @@ module EnumitemBase : sig
   %   |)
 
   % item-local parameters
-  val make-item-local-param : 'a -> 'a Param.t
+  val make-param : 'a -> 'a Param.t
   direct \set-item : ['a Param.t; 'a] inline-cmd
 
 end = struct
@@ -76,9 +77,9 @@ end = struct
   % この param-lst に格納されている inline-text を read-inline するとパラメータがリセットされる．
   let param-lst = Param.make []
 
-  % make-item-local-param は itemize 内で使えるパラメータを作成し，
+  % make-param は itemize 内で使えるパラメータを作成し，
   % param-lst にリセット用のコマンドを登録する関数
-  let make-item-local-param init-value =
+  let make-param init-value =
     let param = Param.make init-value in
     let () = param-lst |> Param.set ({\reset-param(param);} :: Param.get param-lst) in
     param
@@ -296,17 +297,16 @@ module Enumitem : sig
   val default-item : context -> int -> inline-boxes -> inline-text -> block-boxes
 
   % label transform
-  % val hide-only-when : bool -> label -> label
   direct +xlisting : [label; itemfmt; itemize] block-cmd
-  val hidden : bool Param.t
-  direct \hide : [] inline-cmd
+  direct \nolabel : [] inline-cmd
+  direct \ignore : [] inline-cmd
 
   % default commands
-  direct +listing    : [itemize] block-cmd
-  direct +enumerate  : [itemize] block-cmd
+  direct +listing    : [label?; itemize] block-cmd
+  direct +enumerate  : [label?; itemize] block-cmd
   direct +description: [itemize] block-cmd
-  direct \listing    : [itemize] inline-cmd
-  direct \enumerate  : [itemize] inline-cmd
+  direct \listing    : [label?; itemize] inline-cmd
+  direct \enumerate  : [label?; itemize] inline-cmd
   direct \description: [itemize] inline-cmd
 
 end = struct
@@ -480,7 +480,9 @@ end = struct
       ((inline-skip parent-indent) ++ ib-label ++ ib-parent-text)
 
 
-  let-block +listing item = '<+genlisting(bullet)(default-item)(item);>
+  let-block ctx +listing ?:labelf item =
+    let labelf = Option.from bullet labelf in
+    read-block ctx '<+genlisting(labelf)(default-item)(item);>
 
   let default-enum-rule depth =
     match depth with
@@ -489,7 +491,9 @@ end = struct
     | 2 -> paren to-arabic
     | _ -> raw to-arabic
 
-  let-block +enumerate item = '< +genlisting(default-enum-rule)(default-item)(item); >
+  let-block ctx +enumerate ?:labelf item =
+    let labelf = Option.from default-enum-rule labelf in
+    read-block ctx '< +genlisting(labelf)(default-item)(item); >
 
   let-block +description item = '<
     +gendescription(|
@@ -500,25 +504,44 @@ end = struct
     |)(item);
   >
 
-  let-inline \listing item     = {\listing-from-block<+listing(item);>}
-  let-inline \enumerate item   = {\listing-from-block<+enumerate(item);>}
+  let-inline ctx \listing ?:labelf item =
+    match labelf with
+    | Some(labelf) -> read-inline ctx {\listing-from-block<+listing?:(labelf)(item);>}
+    | None         -> read-inline ctx {\listing-from-block<+listing(item);>}
+
+  let-inline ctx \enumerate ?:labelf item =
+    match labelf with
+    | Some(labelf) -> read-inline ctx {\listing-from-block<+enumerate?:(labelf)(item);>}
+    | None         -> read-inline ctx {\listing-from-block<+enumerate(item);>}
+
   let-inline \description item = {\listing-from-block<+description(item);>}
 
   % {{{
-  let hidden = EnumitemBase.make-item-local-param false
-  let-inline \hide = {\EnumitemBase.set-item(hidden)(true);}
+
+  let hide-label = EnumitemBase.make-param false
+  let-inline \nolabel = {\EnumitemBase.set-item(hide-label)(true);}
+
+  let ignore = EnumitemBase.make-param false
+  let-inline \ignore = {\EnumitemBase.set-item(ignore)(true);}
 
   let-block +xlisting labelf itemf item =
     '<+xgenlisting(
       fun dpt idx ctx -> (
         let ib = labelf dpt idx ctx in
-        if (Param.get hidden) then
+        if (Param.get hide-label) then
           let (wid, ht, dp) = get-natural-metrics ib in
           inline-graphics wid ht dp (fun (x, y) -> [])
         else
           ib
       )
-    )(itemf)(item);>
+    )(
+      fun ctx dpt ib-label parent -> (
+        if (Param.get ignore) then
+          block-nil
+        else
+          itemf ctx dpt ib-label parent
+      )
+    )(item);>
 
   % }}}
 
