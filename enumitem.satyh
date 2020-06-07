@@ -15,7 +15,8 @@ module EnumitemBase : sig
   % +xgenlisting(labelf)(itemf){* items}
   % labelf: idxfmt (int -> int -> context -> inline-boxes)
   %     int: depth (0-based indexing)
-  %     int: index of item (1-based indexing)
+  %     int list: index of item (1-based indexing)
+  %               [idx of last nest; ...; idx of 2nd nest; idx of 1st nest]
   %     context: *parent* context
   %     inline-boxes: inline boxes of idxfmt
   % itemf : itemfmt (context -> int -> inline-boxes -> inline-boxes -> inline-boxes)
