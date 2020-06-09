@@ -5,7 +5,7 @@
 @require: option
 @import: param
 
-type idxfmt = int list -> context -> inline-boxes
+type labelfmt = int list -> context -> inline-boxes
 type itemfmt = context -> int -> inline-boxes -> inline-text -> block-boxes
 % type textfmt = int -> context -> context
 
@@ -14,18 +14,18 @@ module EnumitemBase : sig
   % genlisting command
   % +genlisting(labelf)(itemf){* items}
   % +xgenlisting(labelf)(itemf){* items}
-  % labelf: idxfmt (int -> int -> context -> inline-boxes)
+  % labelf: labelfmt (int -> int -> context -> inline-boxes)
   %     int list: index of item (1-based indexing)
   %               [idx of last nest; ...; idx of 2nd nest; idx of 1st nest]
   %     context: *parent* context
-  %     inline-boxes: inline boxes of idxfmt
+  %     inline-boxes: inline boxes of labelfmt
   % itemf : itemfmt (context -> int -> inline-boxes -> inline-boxes -> inline-boxes)
   %     context: parent context
   %     int: depth (0-based indexing)
-  %     inline-boxes: inline boxes of idxfmt
+  %     inline-boxes: inline boxes of labelfmt
   %     inline-boxes: inline boxes of parent text
-  direct +genlisting : [idxfmt; itemfmt; itemize] block-cmd
-  direct +xgenlisting : [idxfmt; itemfmt; itemize] block-cmd
+  direct +genlisting : [labelfmt; itemfmt; itemize] block-cmd
+  direct +xgenlisting : [labelfmt; itemfmt; itemize] block-cmd
 
   direct \listing-from-block : [block-text] inline-cmd
 
@@ -261,7 +261,7 @@ module Enumitem : sig
   val shape-bullet       : context -> inline-boxes
   val shape-white-bullet : context -> inline-boxes
 
-  % idxfmt function
+  % labelfmt function
   % ordered
   val raw-arabic     : int list -> context -> inline-boxes
   val raw-roman      : int list -> context -> inline-boxes
@@ -288,18 +288,18 @@ module Enumitem : sig
   val bullet         : int list -> context -> inline-boxes
   val white-bullet   : int list -> context -> inline-boxes
 
-  % idxfmt transform
-  val change-by-depth : idxfmt list -> idxfmt
+  % labelfmt transform
+  val change-by-depth : labelfmt list -> labelfmt
 
   % item constructor
   val default-item : context -> int -> inline-boxes -> inline-text -> block-boxes
 
   % default commands
-  direct +listing    : [idxfmt?; itemize] block-cmd
-  direct +enumerate  : [idxfmt?; itemize] block-cmd
+  direct +listing    : [labelfmt?; itemize] block-cmd
+  direct +enumerate  : [labelfmt?; itemize] block-cmd
   direct +description: [itemize] block-cmd
-  direct \listing    : [idxfmt?; itemize] inline-cmd
-  direct \enumerate  : [idxfmt?; itemize] inline-cmd
+  direct \listing    : [labelfmt?; itemize] inline-cmd
+  direct \enumerate  : [labelfmt?; itemize] inline-cmd
   direct \description: [itemize] inline-cmd
 
 end = struct
@@ -454,14 +454,14 @@ end = struct
   % ゆくゆくはコマンド引数にレコードの形で指定させるようにするかも
   let item-indent-ratio = Param.make 1.5
 
-  let change-by-depth idxflst idxlst ctx =
+  let change-by-depth labelflst idxlst ctx =
     let dpt = List.length idxlst - 1 in
-    let idxf-len = List.length idxflst in
-    if dpt > idxf-len then
+    let labelf-len = List.length labelflst in
+    if dpt > labelf-len then
       bullet idxlst ctx
     else
-      let idxf = idxflst |> List.nth dpt |> Option.from bullet in
-      idxf idxlst ctx
+      let labelf = labelflst |> List.nth dpt |> Option.from bullet in
+      labelf idxlst ctx
 
   % 現在の context, 階層の深さ，ラベル，本文を指定して箇条書きの1つのアイテムを組み上げる．
   let default-item ctx depth ib-label parent =
@@ -486,10 +486,10 @@ end = struct
 
   let default-enum-rule idxlst =
     match (List.length idxlst) with
-    | 0 -> dot to-arabic idxlst
-    | 1 -> dot to-roman idxlst
-    | 2 -> paren to-arabic idxlst
-    | _ -> raw to-arabic idxlst
+    | 1 -> dot to-arabic idxlst
+    | 2 -> paren to-alph idxlst
+    | 3 -> paren to-roman idxlst
+    | _ -> dot to-arabic idxlst
 
   let-block ctx +enumerate ?:labelf item =
     let labelf = Option.from default-enum-rule labelf in
