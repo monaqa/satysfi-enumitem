@@ -1,10 +1,11 @@
 % -*- coding: utf-8 -*-
 @require: gr
 @require: color
+@require: list
 @require: option
 @import: param
 
-type idxfmt = int -> int list -> context -> inline-boxes
+type idxfmt = int list -> context -> inline-boxes
 type itemfmt = context -> int -> inline-boxes -> inline-text -> block-boxes
 % type textfmt = int -> context -> context
 
@@ -14,7 +15,6 @@ module EnumitemBase : sig
   % +genlisting(labelf)(itemf){* items}
   % +xgenlisting(labelf)(itemf){* items}
   % labelf: idxfmt (int -> int -> context -> inline-boxes)
-  %     int: depth (0-based indexing)
   %     int list: index of item (1-based indexing)
   %               [idx of last nest; ...; idx of 2nd nest; idx of 1st nest]
   %     context: *parent* context
@@ -92,7 +92,7 @@ end = struct
     let _ = List.map (read-inline ctx) (Param.get param-lst) in
 
     % 親のラベルと本文を合わせた block-boxes を作成
-    let ib-label = labelf depth idxlst ctx in
+    let ib-label = labelf idxlst ctx in
     let bb-parent = itemf ctx depth ib-label parent in
 
     % 子の block-boxes を作成
@@ -112,7 +112,7 @@ end = struct
     let _ = read-inline ctx parent in
 
     % 親のラベルと本文を合わせた block-boxes を作成
-    let ib-label = labelf depth idxlst ctx in
+    let ib-label = labelf idxlst ctx in
     let bb-parent = itemf ctx depth ib-label parent in
 
     % 起きてしまった副作用のリセット
@@ -263,30 +263,30 @@ module Enumitem : sig
 
   % idxfmt function
   % ordered
-  val raw-arabic     : int -> int list -> context -> inline-boxes
-  val raw-roman      : int -> int list -> context -> inline-boxes
-  val raw-Roman      : int -> int list -> context -> inline-boxes
-  val raw-alph       : int -> int list -> context -> inline-boxes
-  val raw-Alph       : int -> int list -> context -> inline-boxes
-  val dot-arabic     : int -> int list -> context -> inline-boxes
-  val dot-roman      : int -> int list -> context -> inline-boxes
-  val dot-Roman      : int -> int list -> context -> inline-boxes
-  val dot-alph       : int -> int list -> context -> inline-boxes
-  val dot-Alph       : int -> int list -> context -> inline-boxes
-  val paren-arabic   : int -> int list -> context -> inline-boxes
-  val paren-roman    : int -> int list -> context -> inline-boxes
-  val paren-Roman    : int -> int list -> context -> inline-boxes
-  val paren-alph     : int -> int list -> context -> inline-boxes
-  val paren-Alph     : int -> int list -> context -> inline-boxes
-  val bracket-arabic : int -> int list -> context -> inline-boxes
-  val bracket-roman  : int -> int list -> context -> inline-boxes
-  val bracket-Roman  : int -> int list -> context -> inline-boxes
-  val bracket-alph   : int -> int list -> context -> inline-boxes
-  val bracket-Alph   : int -> int list -> context -> inline-boxes
+  val raw-arabic     : int list -> context -> inline-boxes
+  val raw-roman      : int list -> context -> inline-boxes
+  val raw-Roman      : int list -> context -> inline-boxes
+  val raw-alph       : int list -> context -> inline-boxes
+  val raw-Alph       : int list -> context -> inline-boxes
+  val dot-arabic     : int list -> context -> inline-boxes
+  val dot-roman      : int list -> context -> inline-boxes
+  val dot-Roman      : int list -> context -> inline-boxes
+  val dot-alph       : int list -> context -> inline-boxes
+  val dot-Alph       : int list -> context -> inline-boxes
+  val paren-arabic   : int list -> context -> inline-boxes
+  val paren-roman    : int list -> context -> inline-boxes
+  val paren-Roman    : int list -> context -> inline-boxes
+  val paren-alph     : int list -> context -> inline-boxes
+  val paren-Alph     : int list -> context -> inline-boxes
+  val bracket-arabic : int list -> context -> inline-boxes
+  val bracket-roman  : int list -> context -> inline-boxes
+  val bracket-Roman  : int list -> context -> inline-boxes
+  val bracket-alph   : int list -> context -> inline-boxes
+  val bracket-Alph   : int list -> context -> inline-boxes
 
   % unordered
-  val bullet         : int -> int list -> context -> inline-boxes
-  val white-bullet   : int -> int list -> context -> inline-boxes
+  val bullet         : int list -> context -> inline-boxes
+  val white-bullet   : int list -> context -> inline-boxes
 
   % idxfmt transform
   val change-by-depth : idxfmt list -> idxfmt
@@ -422,47 +422,48 @@ end = struct
 
   % labels
 
-  let raw-arabic _ = raw to-arabic
-  let raw-roman  _ = raw to-roman
-  let raw-Roman  _ = raw to-Roman
-  let raw-alph   _ = raw to-alph
-  let raw-Alph   _ = raw to-Alph
+  let raw-arabic = raw to-arabic
+  let raw-roman  = raw to-roman
+  let raw-Roman  = raw to-Roman
+  let raw-alph   = raw to-alph
+  let raw-Alph   = raw to-Alph
 
-  let dot-arabic _ = dot to-arabic
-  let dot-roman  _ = dot to-roman
-  let dot-Roman  _ = dot to-Roman
-  let dot-alph   _ = dot to-alph
-  let dot-Alph   _ = dot to-Alph
+  let dot-arabic = dot to-arabic
+  let dot-roman  = dot to-roman
+  let dot-Roman  = dot to-Roman
+  let dot-alph   = dot to-alph
+  let dot-Alph   = dot to-Alph
 
-  let paren-arabic _ = paren to-arabic
-  let paren-roman  _ = paren to-roman
-  let paren-Roman  _ = paren to-Roman
-  let paren-alph   _ = paren to-alph
-  let paren-Alph   _ = paren to-Alph
+  let paren-arabic = paren to-arabic
+  let paren-roman  = paren to-roman
+  let paren-Roman  = paren to-Roman
+  let paren-alph   = paren to-alph
+  let paren-Alph   = paren to-Alph
 
-  let bracket-arabic _ = bracket to-arabic
-  let bracket-roman  _ = bracket to-roman
-  let bracket-Roman  _ = bracket to-Roman
-  let bracket-alph   _ = bracket to-alph
-  let bracket-Alph   _ = bracket to-Alph
+  let bracket-arabic = bracket to-arabic
+  let bracket-roman  = bracket to-roman
+  let bracket-Roman  = bracket to-Roman
+  let bracket-alph   = bracket to-alph
+  let bracket-Alph   = bracket to-Alph
 
-  let bullet _ _ = shape-bullet
-  let white-bullet _ _ = shape-white-bullet
+  let bullet _ = shape-bullet
+  let white-bullet _ = shape-white-bullet
 
 
   % ひとまずモジュール共通の Param としておく．
   % ゆくゆくはコマンド引数にレコードの形で指定させるようにするかも
   let item-indent-ratio = Param.make 1.5
 
-  let change-by-depth idxflst dpt idxlst ctx =
-    let len = idxflst |> List.length in
-    if dpt > len then
-      bullet dpt idxlst ctx
+  let change-by-depth idxflst idxlst ctx =
+    let dpt = List.length idxlst - 1 in
+    let idxf-len = List.length idxflst in
+    if dpt > idxf-len then
+      bullet idxlst ctx
     else
       let idxf = idxflst |> List.nth dpt |> Option.from bullet in
-      idxf dpt idxlst ctx
+      idxf idxlst ctx
 
-  % 現在の context, 階層の深さ，を指定し，
+  % 現在の context, 階層の深さ，ラベル，本文を指定して箇条書きの1つのアイテムを組み上げる．
   let default-item ctx depth ib-label parent =
     let parent-indent =
       let fsize = get-font-size ctx in
@@ -483,12 +484,12 @@ end = struct
     let labelf = Option.from bullet labelf in
     read-block ctx '<+genlisting(labelf)(default-item)(item);>
 
-  let default-enum-rule depth =
-    match depth with
-    | 0 -> dot to-arabic
-    | 1 -> dot to-roman
-    | 2 -> paren to-arabic
-    | _ -> raw to-arabic
+  let default-enum-rule idxlst =
+    match (List.length idxlst) with
+    | 0 -> dot to-arabic idxlst
+    | 1 -> dot to-roman idxlst
+    | 2 -> paren to-arabic idxlst
+    | _ -> raw to-arabic idxlst
 
   let-block ctx +enumerate ?:labelf item =
     let labelf = Option.from default-enum-rule labelf in

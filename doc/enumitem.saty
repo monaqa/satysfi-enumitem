@@ -48,7 +48,7 @@ let-block ctx +example str bt =
 let tmp-label = EnumitemBase.make-param bullet
 let-inline \label labelf = {\set-item(tmp-label)(labelf);}
 let-block +label-demo item = '<
-  +xgenlisting(fun depth idx ctx -> (Param.get tmp-label) depth idx ctx)(narrow-margin)(item);
+  +xgenlisting(fun idx ctx -> (Param.get tmp-label) idx ctx)(narrow-margin)(item);
 >
 
 let square-label is-checked ctx =
@@ -74,25 +74,35 @@ let square-label is-checked ctx =
 let done = EnumitemBase.make-param false
 let-inline \done = {\set-item(done)(true);}
 let-block +todo-list item = '<
-  +xgenlisting(fun depth idx ctx -> square-label (Param.get done) ctx)(narrow-margin)(item);
+  +xgenlisting(fun idx ctx -> square-label (Param.get done) ctx)(narrow-margin)(item);
 >
 
-let label-toi dpt (idx :: _) ctx =
+let example idxlst ctx =
+  let idx-to-ib idx =
+    (read-inline ctx (embed-string (arabic idx)))
+      ++ (read-inline ctx {.})
+  in
+  idxlst |> List.map idx-to-ib
+         |> List.fold-left (++) inline-nil
+
+let label-toi (idx :: _) ctx =
   let it-num = embed-string (arabic idx) in
-  let ib-label = read-inline ctx {問#it-num;.\ } in
-  ib-label
+  read-inline ctx {問#it-num;.\ }
+
+let label-japanese-ichi _ ctx = read-inline ctx {一} ++ inline-skip 10pt
 
 let-inline ctx \simple-frame it =
   let pads = (2pt, 2pt, 2pt, 2pt) in
   let decos = HDecoSet.simple-frame-stroke 1pt (Color.black) in
   inline-frame-breakable pads decos (read-inline ctx it)
 
-let label-Roman-framed dpt (idx :: _) ctx =
+let framed-Roman (idx :: _) ctx =
   let label-width = (get-font-size ctx) *' 3.0 in
   let it-num = Enumitem.to-Roman idx in
   let ib-label = read-inline ctx {\simple-frame{#it-num;}\ } in
   let (wid-label, _, _) = get-natural-metrics ib-label in
   inline-skip (label-width -' wid-label) ++ ib-label
+
 let-inline \jugem = {
 寿限無，寿限無，五劫のすりきれ，
 海砂利水魚の水行末・雲来末・風来末，
@@ -236,14 +246,15 @@ document (|
 
   +section{`+listing` における体裁の指定}<
     +p{
-      ここまでの使用法は標準パッケージと大きく変わりませんでしたが，
-      enumitem パッケージが提供する `+listing` などのコマンドでは
-      インデックスの体裁を指定されたものに変更することができます．
+      ここまでの使用法は標準パッケージと大きく変わりませんでした．
+      Enumitem パッケージが提供する `+listing` などのコマンドは，
+      インデックス（）の体裁を指定されたものに変更する機能も持っています．
     }
 
     +subsection{オプション引数を用いたインデックスの体裁指定}<
       +p{
-        `+listing` 及び `+enumerate` では，以下のように1つのオプション引数を受け付けることができます．
+        `+listing` 及び `+enumerate` は以下のように1つのオプション引数を受け付け，
+        インデックスの体裁を指定することができます．
       }
       +example(```
       +listing?:(Enumitem.white-bullet){
@@ -280,7 +291,7 @@ document (|
       >
 
       +p{
-        このように，オプション引数に応じてインデックスの体裁を変更することができます．
+        インデックスの体裁が
         上コードにおける `white-bullet` や `dot-arabic` というのは，
         `Enumitem` と呼ばれるモジュール内で定義されている関数であり， `idxfmt` 型を持ちます．
         モジュール内で定義されている `idxfmt` 型の関数は他にも多数存在し，
@@ -394,10 +405,9 @@ document (|
       +p{
         ここまでの説明で，「 `dot-arabic` 等は `idxfmt` 型の関数だ」と述べましたが，
         そもそも `idxfmt` 型とは何でしょうか．
-        実は `idxfmt` 型とは `int -> int list -> context -> inline-boxes` という型のシノニムであり，
+        実は `idxfmt` 型とは `int list -> context -> inline-boxes` という型のシノニムであり，
         \listing{
-          * 箇条書きの深さ (`int`)
-          * 箇条書きのインデックス (`int list`)
+          * 箇条書きのインデックスのリスト (`int list`)
           * 現在の本文のテキスト処理文脈 (`context`)
         }
         を入力として，
@@ -413,144 +423,183 @@ document (|
       }
 
       +p{
-        まずは単純な例として，
-        「\emph{問1.}\ 」のようなインデックスを持つ箇条書き環境を定義してみましょう．
-        インデックスは太字であり，数字部分はインデックスによってインクリメントされていくものとします．
-        そのような関数は以下のように定義できます．
+        `idxfmt` の使い方を知るため，まず最も単純な `idxfmt` 型を持つ関数を設計してみましょう．
+        以下のような関数を定義します．
+        この関数を定義するためには，標準で提供されている `list` パッケージが必要です．
       }
 
       +code(```
+      let example idxlst ctx =
+        let idx-to-ib idx =
+          (read-inline ctx (embed-string (arabic idx)))
+            ++ (read-inline ctx {.})
+        in
+        idxlst |> List.map idx-to-ib
+               |> List.fold-left (++) inline-nil
       ```);
 
       +p{
-        ただこのように定義するだけで，もう \code(`+genlisting(label-toi)`); の形で
-        箇条書きを使えるようになります．
-        折角使えるようになったので，練習問題でも出してみましょう．
-      }
-
-      +listing?:(label-toi){
-        * 序数をインデックスに持つような箇条書きコマンド\code(`+enumerate-ordinal`);を作成してみよ．
-          つまり，インデックス値が 1 のときは「1st 」，
-          2のときは「2nd」，3のときは「3rd」といったラベルが出力されるようにせよ．
-          ただし，簡単のためにインデックス値 ${N} は ${N \leq 10} を満たすとする．
-
-        * インデックス値が3の倍数と3が付く数字のときだけ
-          アホなフォントになる箇条書きコマンド \code(`+enabeatsumerate`); を作成してみよ．
-          なお，インデックス値${N} は ${N \leq 40} を満たすとする．
-          また，何をアホなフォントとするかについては個人で勝手に決めてよい．
+        SATySFi や OCaml に慣れている方はすぐに読めるかもしれませんが，この関数は
+        `int list -> context -> inline-boxes` 型を持ちます．
+        まず，関数内部で定義された `idx-to-ib` は `int -> inline-boxes` 型を持つクロージャであり，
+        この関数を用いて `int list` 型を持つ `idxlst` を `inline-boxes list` 型へと変換します．
+        続いて得られたリストを左から結合することにより，最終的な `inline-boxes` 型の値を得ます．
+        したがって，もし example の第1引数に `[2; 3; 5; 7]` というリストが与えられた場合，
+        （第2引数のテキスト処理文脈により組み方は変わりますが），
+        「2.3.5.7.」という数字の列を持ったインラインボックス列が出力となります．
       }
 
       +p{
-        第\ref(`basic`);章で
-        「enumitem パッケージでは番号付き箇条書きと番号の付いていない箇条書きを統一的に扱うことができる」
-        と述べました．
-        実際，番号のついていないスタイル指定子も簡単に作成できます．
-        ラベルをインデックス値によらないものにすればよいのですから，
-        インデックス値についての定数関数を指定すればよいのです．
-        ここでは例を示すことはしませんが，気になる方は是非
-        enumitem パッケージ内部の \code(`label-bullet`); の実装を覗いてみてください．
-        関数の内部で，第2引数 \code(`idx`); は一度も使われていません．
+        では，この `example` を `+listing` に指定するとどうなるでしょうか．
+        実際に組んでみると以下のようになります．
+      }
+
+      +example(```
+        +listing?:(example){
+          * あああ
+          * いいい
+          * ううう
+            ** ああああ
+            ** いいいい
+            ** うううう
+          * えええ
+            ** ああああ
+              *** あああああ
+              *** いいいいい
+              *** ううううう
+            ** いいいい
+          * おおお
+        }
+      ```)<
+        +listing?:(example){
+          * あああ
+          * いいい
+          * ううう
+            ** ああああ
+            ** いいいい
+            ** うううう
+          * えええ
+            ** ああああ
+              *** あああああ
+              *** いいいいい
+              *** ううううう
+            ** いいいい
+          * おおお
+        }
+      >
+
+      +p{
+        結果を見れば規則性が分かると思いますが，
+        `+listing` コマンドは `idxfmt` 型の関数が与えられたとき，
+        `idxfmt` に「現在の箇条書きの項目が何番目か」という情報を格納したリストと
+        現在のテキスト処理文脈の2つを渡し，出てきた出力をそのまま箇条書きのラベルとします．
+        なお，「現在の箇条書きが何番目か」を表したリストでは，
+        「${n} 番目に深いリストの番号」が「末尾から数えて ${n} 番目の要素」 に格納されています．
+        つまり，リストの先頭にあるものが「最も深いネストの番号」を表し，
+        末尾にあるものが「最も浅いネストの番号」を表します．
+        これは少し直感に反するかもしれませんが，
+        逆にするより実装が楽になることが多いためこのような仕様にしました．
       }
 
       +p{
-        第\ref(`style-indicator`);節で紹介したとおり，
-        enumitem パッケージではすでに 20 以上のインデックス指定関数が定義されています．
-        しかし，それらはそれぞれ独立に定義されているわけではなく，
-        効率的にコードを使い回すように定義しています．
-        現に番号付きのインデックス指定関数を見れば，
-        それらは実際には2つの要素の掛け合わせで構成されている（数学的には直積）
-        ことが容易にわかるでしょう．
-        具体的には，たとえば \code(`label-arabic-raw`);関数は以下のように定義されています:
+        この仕様さえ理解すれば，好きな箇条書き環境を定義できます．
+        たとえば，「問1.\ 」のようなインデックスは以下のようにして実装できます．
       }
 
       +code(```
+      let label-toi idxlst ctx =
+        let idx = match idxlst with
+          | [] -> 1
+          | idx :: _ -> idx
+        in
+        let it-num = embed-string (arabic idx) in
+        read-inline ctx {問#it-num;.\ }
       ```);
 
       +p{
-        ここで \code(`Enumitem.label-raw`); は
-        \code(`(int -> inline-text) -> context -> int -> inline-boxes`);
-        の型を持つ関数であり，
-        一方で \code(`Enumitem.to-arabic`); は
-        \code(`int -> inline-text`);
-        の型を持つ関数です．
-      }
-
-      +p{
-        Enumitem パッケージ内では，5種類の to- 型関数が用意されています．
-      }
-      +gendescription(|
-          nextline = false;
-          title-inner-gap = 5pt;
-          inner-indent = (fun title-wid -> 130pt);
-          % let ctx-title = ctx |> set-paragraph-margin 12pt 8pt in
-          title-func = (fun ctx title -> read-inline ctx {\emph{#title;}} );
-        |){
-        * \code(`Enumitem.to-arabic`);
-          ** 整数をアラビア数字の inline text に変換する．
-
-        * \code(`Enumitem.to-roman`);
-          ** 整数をローマ数字（小文字）の inline text に変換する．
-
-        * \code(`Enumitem.to-Roman`);
-          ** 整数をローマ数字（大文字）の inline text に変換する．
-
-        * \code(`Enumitem.to-alph`);
-          ** 整数をアルファベット（小文字）の inline text に変換する．
-
-        * \code(`Enumitem.to-Alph`);
-          ** 整数をアルファベット（大文字）の inline text に変換する．
-      }%
-      +p{
-        % \listing{
-        %   * \code(`Enumitem.to-arabic`);: 整数をアラビア数字の inline text に変換する．
-        %   * \code(`Enumitem.to-roman`);: 整数をローマ数字（小文字）の inline text に変換する．
-        %   * \code(`Enumitem.to-Roman`);: 整数をローマ数字（大文字）の inline text に変換する．
-        %   * \code(`Enumitem.to-alph`);: 整数をアルファベット（小文字）の inline text に変換する．
-        %   * \code(`Enumitem.to-Alph`);: 整数をアルファベット（大文字）の inline text に変換する．
-        % }%
-        この関数は，スタイル指定子をユーザ定義する際にも役立ちます．
-        たとえば整数値を大文字のローマ数字へと変換するのは
-        ユーザがプリアンブルで定義するには多少面倒ですが，
-        \code(`Enumitem.to-Roman`);関数を使えば面倒な変換を代わりに行ってくれます．
-        以下は，大文字のローマ数字を四角の枠で囲ったラベルの指定子の定義と，
-        その定義を用いて生成された箇条書きの出力結果です．
+        `let idx =` から始まる行で `idxlst` の一番最初の要素を取り出し，
+        それをインラインテキストに変換しています．
+        実際には enumitem パッケージの内部で `label-toi` の引数に空リストが与えられることはないはずであり，
+        それを踏まえればもう少し簡潔に書くこともできます \footnote{
+          ただし，ユーザが故意に与えた， enumitem パッケージの不具合があったなどの理由で
+          `label-toi` の引数に空リストが与えられてしまった場合は実行時エラーとなるため，
+          その点には注意が必要です．
+        }．
       }
 
       +code(```
-        let-inline ctx \simple-frame it =
-          let pads = (2pt, 2pt, 2pt, 2pt) in
-          let decos = HDecoSet.simple-frame-stroke 1pt (Color.black) in
-          inline-frame-breakable pads decos (read-inline ctx it)
-
-        let label-Roman-framed ctx idx =
-          let label-width = (get-font-size ctx) *' 3.0 in
-          let it-num = Enumitem.to-Roman idx in
-          let ib-label = read-inline ctx {\simple-frame{#it-num;}\ } in
-          let (wid-label, _, _) = get-natural-metrics ib-label in
-          inline-skip (label-width -' wid-label) ++ ib-label
+      let label-toi (idx :: _) ctx =
+        let it-num = embed-string (arabic idx) in
+        read-inline ctx {問#it-num;.\ }
       ```);
 
-      +listing?:(label-Roman-framed){
-        * こんなふうにできる．
-        * こんなふうにできる．
-        * こんなふうにできる．
-        * こんなふうにできる．
+      +p{
+        話が少しそれました．実際に `label-toi` を使ってみましょう．
+      }
+
+        +example(```
+          +enumerate?:(label-toi){
+            * hoge
+            * fuga
+              ** fuga1
+                *** fuga11
+                *** fuga12
+              ** fuga2
+          }
+        ```)<
+          +enumerate?:(label-toi){
+            * hoge
+            * fuga
+              ** fuga1
+                *** fuga11
+                *** fuga12
+              ** fuga2
+          }
+        >
+
+      +p{
+        このように，ネストがある場合でも機能していることが分かります．
       }
 
       +p{
-        先程の「問1.」の例に比べて多少複雑になっているのは，
-        ラベルを右揃えにし，本文の開始位置を揃えているためです．
-        そのためにはラベルのインラインボックス列の横幅を取る必要がありますが，
-        これは \code(`get-natural-metrics`); プリミティブで実現できます．
+        なお，第1引数を「使わない」だけで，番号のない箇条書きの体裁も作成できます．
       }
 
+      +code(```
+        let label-japanese-ichi _ ctx =
+          read-inline ctx {一} ++ inline-skip 10pt
+      ```);
+
+      +p{
+        番号つき箇条書きよりも更にシンプルになりました．
+        このように定義された箇条書きは以下のように用いることができます．
+      }
+
+      +example(```
+        +listing?:(label-japanese-ichi){
+          * 廣ク會議ヲ興シ萬機公論ニ決スベシ
+          * 上下心ヲ一ニシテ盛ニ經綸ヲ行フべシ
+          * 官武一途庶民ニ至ル迄各其志ヲ遂ケ人心ヲシテ倦マサラシメン事ヲ要ス
+          * 舊來ノ陋習ヲ破リ天地ノ公道ニ基クべシ
+          * 智識ヲ世界ニ求メ大ニ皇基ヲ振起スべシ
+        }
+      ```)<
+        +listing?:(label-japanese-ichi){
+          * 廣ク會議ヲ興シ萬機公論ニ決スベシ
+          * 上下心ヲ一ニシテ盛ニ經綸ヲ行フべシ
+          * 官武一途庶民ニ至ル迄各其志ヲ遂ケ人心ヲシテ倦マサラシメン事ヲ要ス
+          * 舊來ノ陋習ヲ破リ天地ノ公道ニ基クべシ
+          * 智識ヲ世界ニ求メ大ニ皇基ヲ振起スべシ
+        }
+      >
     >
 
     +subsection{便利な関数}<
       +p{
         ネストの深さに応じて箇条書きのラベルを変えたい，という要求は珍しくありません．
-        前節で紹介したようにインデックスの体裁を自身で定義すれば当然そういった箇条書きも作成できますが，
-        `change-by-depth` 関数を用いることでもっと簡単に実現できます．
+        インデックスの体裁を自身で定義すれば当然そういった箇条書きも作成できます．
+        しかし，既存の体裁を使いまわしたいのであれば，
+        `Enumitem.change-by-depth` 関数を用いるのがより簡単です．
       }
 
         +example(```
@@ -579,148 +628,31 @@ document (|
     >
   >
 
-    % +section{`+genlisting` を用いたスタイルの指定}<
-    %   +p{
-    %     ここまでの内容は標準で提供されている itemize と大きな違いはありません．
-    %     Enumitem パッケージの特徴は，より一般的な箇条書きを書くためのコマンド
-    %     `+genlisting` を提供している点にあります．
-    %   }
-    %   +subsection{体裁指定用変数を用いた指定}<
-    %     +p{
-    %       まずは `+genlisting` を使用した箇条書きの例です．
-    %     }
-    % 
-    %     +example(```
-    %     +genlisting(Enumitem.dot-arabic)(Enumitem.default-item){
-    %       * hoge
-    %         ** hoge1
-    %         ** hoge2
-    %       * fuga
-    %       * piyo
-    %     }
-    %     ```)<
-    %       +genlisting(Enumitem.dot-arabic)(Enumitem.default-item){
-    %         * hoge
-    %           ** hoge1
-    %           ** hoge2
-    %         * fuga
-    %         * piyo
-    %       }
-    %     >
-    % 
-    %     +p{
-    %       このように，アラビア数字 + ドット をラベルに持つような箇条書きが生成されました．
-    %       `+genlisting` は `+genlisting(labelf)(textf){item}` という形で使用します．
-    %       第1引数の `labelf` はラベルの\emph{体裁指定用変数}であり，
-    %       `Enumitem` モジュールでは `dot-arabic` をはじめとして20種類以上が予め定義されています．
-    %       またその実態は単なる関数ですから，ユーザの手で自由に作成することもできます（詳細は後述）．
-    %       `textf` は本文の \emph{テキスト処理文脈変数} であり，
-    %       こちらも `default-item` という変数が `Enumitem` モジュールで定義されています．
-    %     }
-    % 
-    %     +p{
-    %       \code(`+genlisting`); は番号付きの箇条書きだけでなく，
-    %       番号のつかない箇条書きもサポートしています．
-    %       以下は番号のつかない箇条書きを出力するためのコードと結果の例です．
-    %     }
-    % 
-    %     +example(```
-    %     +genlisting(Enumitem.white-bullet)(Enumitem.default-item){
-    %         * hoge
-    %           ** hoge1
-    %           ** hoge2
-    %         * fuga
-    %         * piyo
-    %       }
-    %     ```)<
-    %       +genlisting(Enumitem.white-bullet)(Enumitem.default-item){
-    %         * hoge
-    %           ** hoge1
-    %           ** hoge2
-    %         * fuga
-    %         * piyo
-    %       }
-    %     >
-    % 
-    %     +p{
-    %       なお，上の例では `white-bullet` などの変数に `Enumitem` を付けていますが，
-    %       実際のマークアップでいちいちこれらを書くのは鬱陶しいかもしれません．
-    %       このような場合，`Enumitem` モジュールを open することで
-    %       名前空間を省略することができます．
-    %     }
-    % 
-    %     +code(```
-    %     @require: enumitem
-    % 
-    %     open Enumitem
-    % 
-    %     in
-    %     document(| 中略 |)<
-    %       中略
-    %     >
-    %     ```);
-    % 
-    %     +p{
-    %       このように書くと， `Enumitem` モジュール内で定義された `raw-arabic` などの関数を
-    %       `Enumitem.raw-arabic` と書かずに直接使えるようになります．
-    %       ただし他のパッケージやユーザで定義した関数名と衝突しないようにするのは使用者の責任となります．
-    %       パッケージを読み込むだけで関数名が衝突するという事態を避けるため，
-    %       open しない限りモジュール名を省略できないようにしています．
-    %     }
-    %   >
-    % 
-    %   +subsection{変数}<
-    %     +p{
-    %       以下は， `Enumitem` モジュール内で定義されている体裁指定用変数の一覧です．
-    %       番号付きの箇条書きには以下の変数を使用できます．
-    %     }
-    % 
-    %     +label-demo{
-    %       * アラビア数字系
-    % 
-    %         ** \code(`raw-arabic`); \label(raw-arabic);
-    %         ** \code(`dot-arabic`); \label(dot-arabic);
-    %         ** \code(`paren-arabic`); \label(paren-arabic);
-    %         ** \code(`bracket-arabic`); \label(bracket-arabic);
-    % 
-    %       * ローマ数字系
-    % 
-    %         ** \code(`raw-roman`); \label(raw-roman);
-    %         ** \code(`raw-Roman`); \label(raw-Roman);
-    %         ** \code(`dot-roman`); \label(dot-roman);
-    %         ** \code(`dot-Roman`); \label(dot-Roman);
-    %         ** \code(`paren-roman`); \label(paren-roman);
-    %         ** \code(`paren-Roman`); \label(paren-Roman);
-    %         ** \code(`bracket-roman`); \label(bracket-roman);
-    %         ** \code(`bracket-Roman`); \label(bracket-Roman);
-    % 
-    %       * アルファベット系
-    % 
-    %         ** \code(`raw-alph`); \label(raw-alph);
-    %         ** \code(`raw-Alph`); \label(raw-Alph);
-    %         ** \code(`dot-alph`); \label(dot-alph);
-    %         ** \code(`dot-Alph`); \label(dot-Alph);
-    %         ** \code(`paren-alph`); \label(paren-alph);
-    %         ** \code(`paren-Alph`); \label(paren-Alph);
-    %         ** \code(`bracket-alph`); \label(bracket-alph);
-    %         ** \code(`bracket-Alph`); \label(bracket-Alph);
-    %     }
-    % 
-    %     +p{
-    %       また，番号の無い箇条書きには以下の変数を使用できます．
-    %     }
-    % 
-    %     +label-demo{
-    %       * \code(`bullet`); \label(bullet);
-    %       * \code(`white-bullet`); \label(white-bullet);
-    %     }
-    %   >
-    % 
-    %   +subsection{ユーザ定義された関数を用いた指定}<
-    % 
-    %   >
-    % 
-    % >
+  +section{`+genlisting` を用いたスタイルの指定}<
+    +p{
+      `+listing` で指定できるのはインデックスの体裁のみでしたが，
+      より一般化されたコマンドである `+genlisting` を用いると，本文の体裁を指定することもできます．
+    }
+
+    +p{
+      実は `+listing` や `+enumerate` コマンドは `+genlisting` を用いて定義されています．
+    }
+
+    +p{
+      お世辞にも簡潔なインターフェースとは言えませんが，
+      複雑なぶん，柔軟な設定が可能です．たとえば
+      \listing{
+        * 本文のフォントサイズや色といった体裁
+        * 箇条書きの項目間の幅
+        * 1つの項目内で行を折り返すときのインデント幅
+        * ネストするときに追加されるインデントの幅
+      }
+      といった項目は，全てこの関数1つで調整することができます．
+      `+genlisting` コマンドの第2引数に渡すだけなので，パッケージを書き換える必要もありません．
+    }
+
+  >
+
 
   +section{動的なフラグを用いたラベル操作}<
     +subsection{`+xgenlisting` コマンド}<
@@ -839,7 +771,7 @@ document (|
       +p{
         このように，本文に `\done;` というコマンドが付いているアイテムに限って，
         チェックボックスにチェックマークが付くようになります．
-        `\done` の位置はどこにあってもかまいません．
+        `\done` の位置は3番目のアイテムの本文中であれば，どこにあってもかまいません．
       }
 
       +p{
@@ -856,8 +788,8 @@ document (|
       }
 
       +p{
-        今回定義した `done` パラメータは bool 型を持つ値でしたが，
-        実際には `int`， `inline-text`， `int -> int -> context -> inline-boxes` 型など
+        今回定義した `done` パラメータは bool 型を保持する値でしたが，
+        実際には `int`， `inline-text`， `int list -> context -> inline-boxes` 型など
         様々な型を持つパラメータを作成することができます．
         したがって，上記の例のようにフラグとして使うだけではなく，
         パラメータの値に応じてインデックスの値を変更したり，
@@ -902,7 +834,7 @@ document (|
     >
   >
 
-  +section{`+gendescription` コマンド}<
+  +section{定義リストの作成}<
 
     +p{工事中}
 
