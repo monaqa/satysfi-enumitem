@@ -37,13 +37,15 @@ let narrow-margin ctx =
   let ctx-new = ctx |> set-paragraph-margin fsize fsize in
     default-item ctx-new
 
-let-block ctx +example str bt =
+let-block ctx +block-frame bt = 
   let decoset = VDecoSet.simple-frame 0.5pt Color.black Color.white in
-  let bb = block-frame-breakable ctx (5pt, 5pt, 10pt, 10pt)
-    decoset (fun ctx -> read-block ctx bt) in
-  read-block ctx '<
+  block-frame-breakable ctx (5pt, 5pt, 10pt, 10pt) decoset (fun ctx -> read-block ctx bt)
+
+let-block +example str bt =
+  '<
     +code(str);
-  > +++ bb
+    +block-frame(bt);
+  >
 
 let tmp-label = EnumitemBase.make-param bullet
 let-inline \label labelf = {\set-item(tmp-label)(labelf);}
@@ -112,6 +114,16 @@ let-inline \jugem = {
 シューリンガンのグーリンダイ，
 グーリンダイのポンポコピーのポンポコナーの長久命の長助．
 }
+
+let-block +description item = '<
+  +gendescription(|
+    nextline = true;
+    title-inner-gap = 5pt;
+    inner-indent = (fun title-wid -> 30pt);
+    % let ctx-title = ctx |> set-paragraph-margin 12pt 8pt in
+    title-func = (fun ctx title -> read-inline ctx {\emph{#title;}} );
+  |)(item);
+>
 % }}}
 
 in
@@ -126,19 +138,18 @@ document (|
   +section{はじめに}<
     +p{
       本ドキュメントは，enumitem パッケージ (v2.0.0) の仕様および使い方について述べたものです．
-      Enumitem は v1.x から v2.0 にバージョンアップする際にほぼ全てのコマンドの仕様を変更しており，
-      v1.x を使っている場合はこのドキュメントに書かれている内容では動きません．
-      旧版のドキュメントを確認してください．
+      Enumitem は v1.x.x から v2.0.0 にバージョンアップする際にほぼ全てのコマンドの仕様を変更しており，
+      v1.x.x を使っている場合はこのドキュメントに書かれている内容では動きません．
+      旧バージョンの enumitem を用いたい場合は旧版ドキュメントを確認してください．
     }
   >
 
   +section{Enumitem パッケージの概要}<
     +p{
-      Enumitem は，組版システム \SATySFi; において，
+      Enumitem は，組版システム \SATySFi; において
       豊富な箇条書きリストや番号付きのリストを出力するためのパッケージです．
-      \SATySFi; には itemize というパッケージが標準で用意されていますが，
-      enumitem パッケージでは itemize パッケージと比較してより豊富な機能を提供します
-      （2020年5月23日現在）．
+      \SATySFi; には既に itemize というパッケージが標準で用意されていますが，
+      enumitem パッケージではより豊富な機能を提供します（2020年5月23日現在）．
 
       具体的には， enumitem パッケージを使うことで以下のような恩恵を受けられます．
       \listing{
@@ -244,7 +255,7 @@ document (|
     >
   >
 
-  +section{`+listing` における体裁の指定}<
+  +section{ラベルの体裁の変更}<
     +p{
       ここまでの使用法は標準パッケージと大きく変わりませんでした．
       Enumitem パッケージが提供する `+listing` などのコマンドは，
@@ -659,18 +670,21 @@ document (|
       +p{
         たとえば，以下のような To-Do リストを作成したくなったとします．
       }
-      +todo-list{
-        * ミルクを買う．
-        * The \SATySFi;book を読む．
-        * \done; \SATySFi; を完全に理解する．
-        * 課題を解く．
-      }
+
+      +block-frame<
+        +todo-list{
+          * ミルクを買う．
+          * The \SATySFi;book を読む．
+          * \done; \SATySFi; を完全に理解する．
+          * 課題を解く．
+        }
+      >
 
       +p{
-        ここで，ラベルを作成する関数は既に用意されているとします．たとえば
-        以下の関数 `square-label is-checked ctx` は，
+        ここで，ラベルを作成するための関数は既に用意されているものとします．
+        たとえば，以下の関数 `square-label` は `bool -> context -> inline-boxes` 型を持ち，
         第1引数 `is-checked` が true のときチェック済みの，
-        false のときチェック済みでないチェックボックスを描画する関数です．
+        false のときチェック済みでないチェックボックスを描画します．
       }
       +code(```
         let square-label is-checked ctx =
@@ -704,18 +718,6 @@ document (|
       }
 
       +code(```
-      +genlisting(fun depth idx ctx -> (
-        let checked = match idx with
-          | 3 -> true
-          | _ -> false
-        in
-        square-label checked ctx
-      ))(default-item){
-        * ミルクを買う．
-        * The \SATySFi;book を読む．
-        * \SATySFi; を完全に理解する．
-        * 課題を解く．
-      }
       ```);
 
       +p{
@@ -739,15 +741,8 @@ document (|
       }
 
       +code(```
-        let done = EnumitemBase.make-param false
-        let-inline \done = {\set-item(done)(true);}
-        let-block +todo-list item = '<
-          +xgenlisting(
-            fun depth idx ctx -> square-label (Param.get done) ctx
-          )(default-item)(item);
-        >
       ```);
-      
+
       +p{
         この `+todo-list` 及び `\done` コマンドを使うと，
         先程の箇条書きは以下のようにシンプルに書くことができます．
@@ -771,7 +766,7 @@ document (|
       +p{
         このように，本文に `\done;` というコマンドが付いているアイテムに限って，
         チェックボックスにチェックマークが付くようになります．
-        `\done` の位置は3番目のアイテムの本文中であれば，どこにあってもかまいません．
+        `\done` の位置は，3番目のアイテムの本文中であればどこにあってもかまいません．
       }
 
       +p{
@@ -789,11 +784,12 @@ document (|
 
       +p{
         今回定義した `done` パラメータは bool 型を保持する値でしたが，
-        実際には `int`， `inline-text`， `int list -> context -> inline-boxes` 型など
+        実際には `int` 型や `inline-text` 型など，
+        % `int`， `inline-text`， `int list -> context -> inline-boxes` 型など
         様々な型を持つパラメータを作成することができます．
-        したがって，上記の例のようにフラグとして使うだけではなく，
-        パラメータの値に応じてラベルの値を変更したり，
-        ラベルそのもののレイアウトを変えたり，と多彩なカスタマイズが可能となります．
+        `int list -> context -> inline-boxes` のような関数も入れることができるため，
+        パラメータの値に応じてラベルのインデックスを変更したり，
+        ラベルの体裁そのものを変えたり，と多彩なカスタマイズが可能となります．
       }
 
     >
@@ -834,11 +830,184 @@ document (|
     >
   >
 
-  +section{定義リストの作成}<
+  +section?:(`sse:description`){定義リストの作成}<
 
-    +p{工事中}
+    +p{
+      \LaTeX; や HTML において標準で用意されている箇条書きは3種類ありました．
+      順序なしリスト（番号のない箇条書き），順序リスト（番号付き箇条書き），
+      そして定義リストです．
+    }
 
+    +description{
+      * 順序なしリスト
+
+        ** 順序を表すインデックスのない箇条書きです．
+           通常，\LaTeX; では itemize 環境，
+           HTML では \code(`<ul>`); タグにより組まれます．
+
+      * 順序リスト
+
+        ** 順序を表すインデックスのある箇条書きです．
+           通常，\LaTeX; では enumerate 環境，
+           HTML では \code(`<ol>`); タグにより組まれます．
+
+      * 定義リスト
+
+        ** 各インデックス毎に固有の単語が付与されている箇条書きです．
+           通常，\LaTeX; では description 環境，
+           HTML では \code(`<dl>`); タグにより組まれます．
+        ** この説明で用いられているリストは定義リストです．
+
+    }
+
+    +p{
+      1 番目及び 2 番目のリストは
+      \SATySFi; 標準の itemize パッケージでも実現することが出来ますし，
+      enumitem パッケージでも実現できることは今までに述べたとおりです．
+      それに対し，3番目の定義リストを実現する手段は標準の itemize パッケージでは用意されていませんでした．
+    }
+
+    +p{
+      Enumitem では，定義リストを実現する \code(`+gendescription`); コマンドを用意しています．
+      このコマンドを用いれば汎用性の高い定義リストを記述することができます．
+      具体例を以下に示します．
+    }
+
+      +example(```
+      +gendescription(|
+        nextline = false;
+        title-inner-gap = 10pt;
+        inner-indent = (fun title-wid -> title-wid);
+        title-func =
+          (fun ctx title -> read-inline ctx {\textbf{#title;}} );
+      |){
+        * 英語のパングラム
+          ** The quick brown fox jumps over the lazy dog.
+
+        * 日本語のパングラム
+          ** いろはにほへとちりぬるを
+             わかよたれそつねならむ
+             うゐのおくやまけふこえて
+             あさきゆめみしゑひもせすん
+          ** いろはにほへとちりぬるを
+             わかよたれそつねならむ
+             うゐのおくやまけふこえて
+             あさきゆめみしゑひもせすん
+      }
+      ```)<
+        +gendescription(|
+          nextline = false;
+          title-inner-gap = 10pt;
+          inner-indent = (fun title-wid -> title-wid);
+          title-func = (fun ctx title -> read-inline ctx {\emph{#title;}});
+        |){
+          * 英語のパングラム
+            ** The quick brown fox jumps over the lazy dog.
+
+          * 日本語のパングラム
+            ** いろはにほへとちりぬるを
+               わかよたれそつねならむ
+               うゐのおくやまけふこえて
+               あさきゆめみしゑひもせすん
+            ** いろはにほへとちりぬるを
+               わかよたれそつねならむ
+               うゐのおくやまけふこえて
+               あさきゆめみしゑひもせすん
+        }
+      >
+
+      +p{
+        具体例を見れば分かる通り，
+        \code(`+genlisting`); などのコマンドとはかなりインターフェースが異なります．
+        \code(`+gendescription`); は2つの引数 \code(`record`); と \code(`inner`); をとり，
+        \code(`record`); で description コマンドの体裁を設定し，
+        \code(`inner`); に表示したい内容を並べます．
+      }
+
+      +p{
+        \SATySFi; には現在，\LaTeX; の \code(`\item[label]`); のように
+        箇条書きの item 毎にラベルを変更するためのマークアップを提供していません．
+        そこで， \code(`+gendescription`); コマンドでは
+        \code(`inner`); 部分を以下のように定めることで，
+        \SATySFi; の箇条書き構文のインターフェースに沿った定義リストを実現しました．
+        \listing{
+          * 1番目の深さの item （ \code(`*`); が1つ並んでいるところ）に，
+            定義リストの各 item に相当する見出しを書く．
+
+          * 各見出しの子に相当する item （ \code(`*`); が2つ並んでいるところ）に，
+            定義リストの本文を書く．
+            複数の子 item を同じ親の下に並べて書くことで，複数の段落を記述することができる．
+        }
+        説明を読むよりも前述の具体例を見たほうが使用法が掴みやすいでしょう．
+      }
+
+      +p{
+        また，\code(`+gendescription`); コマンドでは第1引数でレコードを渡すことにより，
+        柔軟に定義リストを構成することができます．
+        レコードの値は4種類あり，
+        これらは全てオプションではなく必須引数です．
+      }
+
+      +gendescription(|
+        nextline = false;
+        title-inner-gap = 10pt;
+        inner-indent = (fun title-wid -> 20pt);
+        title-func =
+          (fun ctx title -> read-inline ctx {\emph{#title;}} );
+      |){
+        * nextline
+          ** (`bool`)
+          ** 各 item のタイトルと本文の間に改行を挟むかどうか．
+             true ならば改行を行う． false ならば改行を行わない．
+
+        * title-inner-gap
+          ** (`length`)
+          ** 各 item のタイトルと本文の間に挿入する最小の空白幅．
+             どちらかというと「各 item のタイトルの右に常においておく余白」
+             というイメージが近い．
+
+        * inner-indent
+          ** (`length -> length`)
+          ** 「タイトルの幅を引数として，本文インデント量を返す関数」を指定する．
+             わざわざ関数を指定するようにしているのは，
+             タイトル幅に応じてインデントを動的に変えられるようにするため．
+             たとえば \code(`(fun _ -> 10pt)`); を指定すれば，
+             本文ではタイトルの幅の長さに関わらず常に 10pt のインデントが行われる
+             （ただし，タイトルが記述されている行を除く）．
+             また，\code(`(fun title-wid -> title-wid)`); を指定すれば，
+             タイトル幅（title-inner-gap を含む）と同じだけのインデントが行われる．
+
+        * title-func
+          ** (`context -> inline-text -> inline-boxes`)
+          ** 「テキスト処理文脈及びタイトルのインラインテキストを引数として，
+             タイトルのインラインボックス列を返す関数」を指定する．
+             最も簡単なのは \code(`read-inline`); 関数をそのまま指定すること．
+             この関数内部で \code(`\textbf`); のコマンドを挟んだり，
+             テキスト処理文脈をいじってフォントを変更したりすることで，
+             各 item のタイトルだけを太字にする，といった処理が可能になる．
+      }
+
+      +p{
+        定義リストを書くたびにこれら4つの要素が埋まったレコードを指定しなければならない面倒だ，
+        と感じたかもしれません．尤もです．
+        しかし例によって，プリアンブルで \SATySFi; のコマンド定義を適切に行えば，
+        面倒な記述を一度書くだけでよくなります．
+        たとえばデフォルトで用意されている \code(`+description`); コマンドは
+        以下のように定義されています．
+      }
+
+      +code(```
+      let-block +description item = '<
+        +gendescription(|
+          nextline = true;
+          title-inner-gap = 5pt;
+          inner-indent = (fun title-wid -> 20pt);
+          title-func = read-inline;
+        |)(item);
+      >
+      ```);
   >
+
 
   +section{おわりに}<
     +p{

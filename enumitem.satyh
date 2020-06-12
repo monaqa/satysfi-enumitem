@@ -211,7 +211,7 @@ end = struct
     let ib-inner = embed-block-top ctx-inner box-width bb-inner-func in
     let ctx-adjmgn = ctx |> set-paragraph-margin gap-inner-item gap-between-item in
 
-    line-break false true ctx-adjmgn (ib-title-box ++ ib-inner)
+    line-break true true ctx-adjmgn (ib-title-box ++ ib-inner)
 
   let desc-item record ctx (Item(title, itmzlst)) =
     let innerlst = List.map (fun (Item(text, _)) -> text) itmzlst in
