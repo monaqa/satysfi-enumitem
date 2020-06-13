@@ -7,18 +7,19 @@
 
 open Enumitem
 
-% custom labels {{{
+% custom commands
 let-block ctx +ctx ctxf bt = read-block (ctxf ctx) bt
 
-let document record bt = StdJaBook.document record '<
+let document record bt = StdJaBook.document record '<%
   +ctx(fun ctx -> (
     let fsize = get-font-size ctx in
     ctx |> set-paragraph-margin fsize fsize
+        % |> set-font-size 5pt
         |> set-leading (fsize *' 1.6)
         |> set-code-text-command (command \code)
     % ctx
   ))(bt);
-  >
+  >%
 
 let font-ratio-latin = 1.
 let font-ratio-cjk = 0.88
@@ -42,16 +43,28 @@ let-block ctx +block-frame bt =
   block-frame-breakable ctx (5pt, 5pt, 10pt, 10pt) decoset (fun ctx -> read-block ctx bt)
 
 let-block +example str bt =
-  '<
+  '<%
     +code(str);
     +block-frame(bt);
-  >
+  >%
 
+let-inline \jugem = {
+  寿限無，寿限無，五劫のすりきれ，
+  海砂利水魚の水行末・雲来末・風来末，
+  食う寝るところに住むところ，
+  やぶら小路のぶら小路，
+  パイポパイポ，パイポのシューリンガン，
+  シューリンガンのグーリンダイ，
+  グーリンダイのポンポコピーのポンポコナーの長久命の長助．
+}
+
+
+% custom itemizes
 let tmp-label = EnumitemBase.make-param bullet
 let-inline \label labelf = {\set-item(tmp-label)(labelf);}
-let-block +label-demo item = '<
+let-block +label-demo item = '<%
   +xgenlisting(fun idx ctx -> (Param.get tmp-label) idx ctx)(narrow-margin)(item);
->
+>%
 
 let square-label is-checked ctx =
   let fs value = (get-font-size ctx) *' value in
@@ -75,9 +88,9 @@ let square-label is-checked ctx =
 
 let done = EnumitemBase.make-param false
 let-inline \done = {\set-item(done)(true);}
-let-block +todo-list item = '<
+let-block +todo-list item = '<%
   +xgenlisting(fun idx ctx -> square-label (Param.get done) ctx)(narrow-margin)(item);
->
+>%
 
 let example idxlst ctx =
   let idx-to-ib idx =
@@ -105,26 +118,33 @@ let framed-Roman (idx :: _) ctx =
   let (wid-label, _, _) = get-natural-metrics ib-label in
   inline-skip (label-width -' wid-label) ++ ib-label
 
-let-inline \jugem = {
-寿限無，寿限無，五劫のすりきれ，
-海砂利水魚の水行末・雲来末・風来末，
-食う寝るところに住むところ，
-やぶら小路のぶら小路，
-パイポパイポ，パイポのシューリンガン，
-シューリンガンのグーリンダイ，
-グーリンダイのポンポコピーのポンポコナーの長久命の長助．
-}
-
-let-block +description item = '<
+let-block +description item = '<%
   +gendescription(|
-    nextline = true;
-    title-inner-gap = 5pt;
+    desc-config with
     inner-indent = (fun title-wid -> 30pt);
     % let ctx-title = ctx |> set-paragraph-margin 12pt 8pt in
     title-func = (fun ctx title -> read-inline ctx {\emph{#title;}} );
   |)(item);
->
-% }}}
+>%
+
+let-block +parameters item = '<%
+  +gendescription(|
+    nextline = false;
+    title-inner-gap = 10pt;
+    inner-indent = (fun title-wid -> 20pt);
+    title-func =
+      (fun ctx title -> read-inline ctx {\emph{#title;}} );
+  |)(item);
+>%
+
+
+let paren-arabic-gray idxlst ctx =
+  let ctx2 = ctx |> set-text-color (Color.gray 0.7) in
+  paren-arabic idxlst ctx2
+let gray-item ctx =
+  let ctx2 = ctx |> set-text-color (Color.gray 0.7) in
+  default-item ctx2
+
 
 in
 document (|
@@ -133,18 +153,18 @@ document (|
   date = {2020/05/23};
   show-title = true;
   show-toc = true;
-|) '<
+|) '<%
 
-  +section{はじめに}<
+  +section{はじめに}<%
     +p{
       本ドキュメントは，enumitem パッケージ (v2.0.0) の仕様および使い方について述べたものです．
       Enumitem は v1.x.x から v2.0.0 にバージョンアップする際にほぼ全てのコマンドの仕様を変更しており，
       v1.x.x を使っている場合はこのドキュメントに書かれている内容では動きません．
       旧バージョンの enumitem を用いたい場合は旧版ドキュメントを確認してください．
     }
-  >
+  >%
 
-  +section{Enumitem パッケージの概要}<
+  +section{Enumitem パッケージの概要}<%
     +p{
       Enumitem は，組版システム \SATySFi; において
       豊富な箇条書きリストや番号付きのリストを出力するためのパッケージです．
@@ -160,12 +180,12 @@ document (|
         * ユーザ自身がスタイルを容易に拡張できる
       }
     }
-  >
+  >%
 
-  +section{基本的な使い方}<
+  +section{基本的な使い方}<%
     +p{
       Enumitem を使うには，当然ですがパッケージを読み込む必要があります．
-      パッケージが正しくインストールされていれば，
+      パッケージのソースを \SATySFi; の処理系が認識できる位置に置かれていれば，
       文書の冒頭に以下の1行を追加するだけで読み込むことができます．
     }
 
@@ -180,15 +200,6 @@ document (|
     }
 
     +example(```
-    +listing{
-      * hoge
-      * fuga
-        ** fuga1
-          *** fuga11
-          *** fuga12
-        ** fuga2
-    }
-    ```)<
       +listing{
         * hoge
         * fuga
@@ -197,19 +208,19 @@ document (|
             *** fuga12
           ** fuga2
       }
-    >
+    ```)<%
+      +listing{
+        * hoge
+        * fuga
+          ** fuga1
+            *** fuga11
+            *** fuga12
+          ** fuga2
+      }
+    >%
 
 
     +example(```
-    +enumerate{
-      * hoge
-      * fuga
-        ** fuga1
-          *** fuga11
-          *** fuga12
-        ** fuga2
-    }
-    ```)<
       +enumerate{
         * hoge
         * fuga
@@ -218,7 +229,16 @@ document (|
             *** fuga12
           ** fuga2
       }
-    >
+    ```)<%
+      +enumerate{
+        * hoge
+        * fuga
+          ** fuga1
+            *** fuga11
+            *** fuga12
+          ** fuga2
+      }
+    >%
 
     +p{
       このように番号つき箇条書き環境のネストもサポートしており，
@@ -241,7 +261,7 @@ document (|
       }
       食う寝るところに住むところ...
     }
-    ```)<
+    ```)<%
       +p{
         寿限無，寿限無，五劫のすりきれ，
         海砂利水魚の
@@ -252,17 +272,17 @@ document (|
         }
         食う寝るところに住むところ...
       }
-    >
-  >
+    >%
+  >%
 
-  +section{ラベルの体裁の変更}<
+  +section{ラベルの体裁の変更}<%
     +p{
       ここまでの使用法は標準パッケージと大きく変わりませんでした．
       Enumitem パッケージが提供する `+listing` などのコマンドは，
       箇条書きのラベル（項目の先頭につく数字や記号）の体裁を指定されたものに変更する機能も持っています．
     }
 
-    +subsection{オプション引数を用いたラベルの体裁指定}<
+    +subsection{オプション引数を用いたラベルの体裁指定}<%
       +p{
         `+listing` 及び `+enumerate` は以下のように1つのオプション引数を受け付け，
         ラベルの体裁を指定することができます．
@@ -275,7 +295,7 @@ document (|
         * fuga
         * piyo
       }
-      ```)<
+      ```)<%
         +listing?:(Enumitem.white-bullet){
           * hoge
             ** hoge1
@@ -283,7 +303,7 @@ document (|
           * fuga
           * piyo
         }
-      >
+      >%
       +example(```
       +enumerate?:(Enumitem.dot-arabic){
         * hoge
@@ -291,7 +311,7 @@ document (|
           ** hoge2
         * fuga
         * piyo
-      ```)<
+      ```)<%
         +enumerate?:(Enumitem.dot-arabic){
           * hoge
             ** hoge1
@@ -299,7 +319,7 @@ document (|
           * fuga
           * piyo
         }
-      >
+      >%
 
       +p{
         ラベルの体裁が
@@ -363,9 +383,9 @@ document (|
         使い分けたほうが可読性は向上するでしょう．}．
 
       }
-    >
+    >%
 
-    +subsection{ラベルの体裁を定める変数名一覧}<
+    +subsection{ラベルの体裁を定める変数名一覧}<%
       +p{
         以下は `Enumitem` モジュール内で定義されている体裁指定用変数の一覧です．
         番号付きの箇条書きを行いたい場合は，以下の変数を使用できます．
@@ -410,9 +430,9 @@ document (|
         * \code(`bullet`); \label(bullet);
         * \code(`white-bullet`); \label(white-bullet);
       }
-    >
+    >%
 
-    +subsection{ラベルの体裁をユーザ定義する方法}<
+    +subsection{ラベルの体裁をユーザ定義する方法}<%
       +p{
         ここまでの説明で，「 `dot-arabic` 等は `labelfmt` 型の関数だ」と述べましたが，
         そもそも `labelfmt` 型とは何でしょうか．
@@ -481,7 +501,7 @@ document (|
             ** いいいい
           * おおお
         }
-      ```)<
+      ```)<%
         +listing?:(example){
           * あああ
           * いいい
@@ -497,7 +517,7 @@ document (|
             ** いいいい
           * おおお
         }
-      >
+      >%
 
       +p{
         結果を見れば規則性が分かると思いますが，
@@ -557,7 +577,7 @@ document (|
                 *** fuga12
               ** fuga2
           }
-        ```)<
+        ```)<%
           +enumerate?:(label-toi){
             * hoge
             * fuga
@@ -566,7 +586,7 @@ document (|
                 *** fuga12
               ** fuga2
           }
-        >
+        >%
 
       +p{
         このように，ネストがある場合でも機能していることが分かります．
@@ -594,7 +614,7 @@ document (|
           * 舊來ノ陋習ヲ破リ天地ノ公道ニ基クべシ
           * 智識ヲ世界ニ求メ大ニ皇基ヲ振起スべシ
         }
-      ```)<
+      ```)<%
         +listing?:(label-japanese-ichi){
           * 廣ク會議ヲ興シ萬機公論ニ決スベシ
           * 上下心ヲ一ニシテ盛ニ經綸ヲ行フべシ
@@ -602,10 +622,10 @@ document (|
           * 舊來ノ陋習ヲ破リ天地ノ公道ニ基クべシ
           * 智識ヲ世界ニ求メ大ニ皇基ヲ振起スべシ
         }
-      >
-    >
+      >%
+    >%
 
-    +subsection{便利な関数}<
+    +subsection{便利な関数}<%
       +p{
         ネストの深さに応じて箇条書きのラベルを変えたい，という要求は珍しくありません．
         ラベルの体裁を自身で定義すれば当然そういった箇条書きも作成できます．
@@ -624,7 +644,7 @@ document (|
                 *** fuga12
               ** fuga2
           }
-        ```)<
+        ```)<%
           +listing?:(
             change-by-depth [bracket-Alph; white-bullet; paren-arabic]
           ){
@@ -635,50 +655,354 @@ document (|
                 *** fuga12
               ** fuga2
           }
-        >
-    >
-  >
+        >%
+    >%
+  >%
 
-  +section{`+genlisting` を用いたスタイルの指定}<
+  +section{本文の体裁の指定}<%
     +p{
-      `+listing` で指定できるのはラベルの体裁のみでしたが，
-      より一般化されたコマンドである `+genlisting` を用いると，本文の体裁を指定することもできます．
-    }
-
-    +p{
-      実は `+listing` や `+enumerate` コマンドは `+genlisting` を用いて定義されています．
-    }
-
-    +p{
-      お世辞にも簡潔なインターフェースとは言えませんが，
-      複雑なぶん，柔軟な設定が可能です．たとえば
+      前節でラベルの体裁の変更方法を説明しましたが，
+      変更できるのはあくまでラベル部分のみであり，それ以外の部分の体裁に干渉するものではありませんでした．
+      実際，`+listing` コマンドで指定できるのはラベルの体裁のみでしたが，
+      本文のフォントや，本文が複数行に渡るときのインデント量といった細かい要素を指定することはできません．
+      そういった要素は，
+      箇条書きコマンド `+listing` や `+enumerate` をより一般化した `+genlisting` コマンドを用います．
+      `+genlisting` は `+listing` にくらべて複雑インターフェースを持ちますがその分自由度が高く，
       \listing{
         * 本文のフォントサイズや色といった体裁
         * 箇条書きの項目間の幅
         * 1つの項目内で行を折り返すときのインデント幅
         * ネストするときに追加されるインデントの幅
       }
-      といった項目は，全てこの関数1つで調整することができます．
-      `+genlisting` コマンドの第2引数に渡すだけなので，パッケージを書き換える必要もありません．
+      といった項目を全てこの関数1つで制御することができます
+      （これらを変更するために，
+      `enumitem` パッケージの中身を書き換える必要はありません）．
     }
 
-  >
+    +subsection{`+genlisting` コマンドの仕様}<%
 
+      +p{
+        `+genlisting` の使い方を説明するため，
+        まず `+listing` コマンドがパッケージ中でどのように定義されているか見てみましょう．
+        実は，`+listing` や `+enumerate` コマンドは `+genlisting` を用いて以下のように定義されています．
+      }
 
-  +section{動的なフラグを用いたラベル操作}<
-    +subsection{`+xgenlisting` コマンド}<
+      +code(```
+        let-block ctx +listing ?:labelf item =
+          let labelf = Option.from bullet labelf in
+          read-block ctx '<+genlisting(labelf)(default-item)(item);>
+      ```);
+
+      +p{
+        このように， `+genlisting` は以下の3つの引数を取ります（オプション引数は有りません）．
+      }
+
+      % description のほうが見やすいかも
+      +listing?:(change-by-depth [bullet; dot-arabic]){
+        * `labelf (int list -> context -> inline-boxes)`: ラベルの体裁を指定する関数
+        * `itemf (context -> int -> inline-boxes -> inline-text -> block-boxes)`:
+          ラベル及び本文の組み方を指定する関数．
+          以下の引数を与えると，箇条書きの項目を組んでブロックボックス列を返す．
+          ** 箇条書きが組まれる位置でのテキスト処理文脈 (`context`)，
+          ** 対象となる項目の深さ (`int`)．
+          ** 対象となる項目にて組まれることになるラベル (`inline-boxes`)．
+          ** 本文を表すインラインテキスト (`inline-text`)
+        * `item (itemize)`: 箇条書きの内容
+      }
+
+      +p{
+        1番目は `+listing` のオプショナル引数，3番目は `+listing` の必須引数と同様ですが，
+        `+genlisting` では追加で2番目の `itemf` 引数を指定することができます．
+        これは「深さとラベルと本文が与えられたときに，
+        箇条書きの1つの項目を組んでブロックボックス列にする」
+        関数であり，まさに箇条書きの体裁を直接指定する自由度の高い関数です．
+      }
+
+      +p{
+        `+genlisting` コマンドが呼び出されると，以下の処理を再帰的に行うことで箇条書きを組みます．
+      }
+
+      +enumerate{
+        * 第1引数で与えられた `labelf` を用いて親項目のラベルを組む．
+        * 第2引数で与えられた `itemf` を用いて親項目の本文を組む
+          （そのときに先程組んだラベルのインラインボックス列を渡す）．
+        * 子項目を親と同じ要領で組み，親項目のブロックボックス列の下に結合する．
+      }
+
+      +p{
+        再帰的な処理と一項目に対する処理を分離することで，
+        柔軟性の高い箇条書きが表現できる仕組みとなっています．
+      }
+
+    >%
+
+    +subsection{`+genlisting` を用いた本文の体裁の指定}<%
+      
+      +p{
+        `+listing` で用いられている本文指定関数は `default-item` という名前であり，
+        これは `Enumitem.default-item` とすることでユーザが用いることができます．
+        `default-item` 関数は以下のように定義されています：
+      }
+
+      +code(```
+        let default-item ctx depth ib-label text =
+          let text-indent =
+            let fsize = get-font-size ctx in
+            fsize *' ((Param.get item-indent-ratio) *. (float depth))
+          in
+          let ib-text =
+            let index-width = get-natural-width ib-label in
+            let item-text-width =
+              (get-text-width ctx) -' text-indent -' index-width
+            in
+            embed-block-top ctx item-text-width (fun ctx ->
+              line-break true true ctx (read-inline ctx text ++ inline-fil)
+            )
+          in
+          line-break true true ctx
+            ((inline-skip text-indent) ++ ib-label ++ ib-text)
+      ```);
+
+      +p{
+        基本的にはこの関数をいろいろいじって自分好みの関数に仕上げるわけですが，
+        本文のテキスト処理文脈をいじる程度であれば，
+        `default-item` をそのまま用いて比較的簡単に実装できます．
+      }
+
+      +example(```
+        % プリアンブルに書く
+        let gray-item ctx =
+          let ctx2 = ctx |> set-text-color (Color.gray 0.7) in
+          default-item ctx2
+
+        % 本文中に書く
+        +genlisting(paren-arabic)(gray-item){
+          * hoge
+          * fuga
+            ** fuga1
+              *** fuga11
+              *** fuga12
+            ** fuga2
+        }
+      ```)<%
+        +genlisting(paren-arabic)(gray-item){
+          * hoge
+          * fuga
+            ** fuga1
+              *** fuga11
+              *** fuga12
+            ** fuga2
+        }
+      >%
+      +p{
+        見ての通り，第2引数の関数内部でテキスト処理文脈を変更しても，
+        ラベルの色は変わらないことに注意してください．
+        ラベルと本文のインラインボックス列は別のテキスト処理文脈に基づいて組まれるためです．
+        ラベルの色を変更する場合は，以下のように第1引数を変更します．
+      }
+      +example(```
+        % プリアンブルに書く
+        let paren-arabic-gray idxlst ctx =
+          let ctx2 = ctx |> set-text-color (Color.gray 0.7) in
+          paren-arabic idxlst ctx2
+
+        % 本文中に書く
+        +genlisting(paren-arabic-gray)(gray-item){
+          * hoge
+          * fuga
+            ** fuga1
+              *** fuga11
+              *** fuga12
+            ** fuga2
+        }
+      ```)<%
+        +genlisting(paren-arabic-gray)(gray-item){
+          * hoge
+          * fuga
+            ** fuga1
+              *** fuga11
+              *** fuga12
+            ** fuga2
+        }
+      >%
+
+      +code(```
+        let large-indent-item ctx depth ib-label text =
+          let text-indent =
+            let fsize = get-font-size ctx in
+            fsize *' ((Param.get item-indent-ratio) *. (float depth))
+          in
+          let ib-text =
+            let index-width = get-natural-width ib-label in
+            let item-text-width =
+              (get-text-width ctx) -' text-indent -' index-width
+            in
+            embed-block-top ctx item-text-width (fun ctx ->
+              line-break true true ctx (read-inline ctx text ++ inline-fil)
+            )
+          in
+          line-break true true ctx
+            ((inline-skip text-indent) ++ ib-label ++ ib-text)
+      ```);
+
+    >%
+  >%
+
+  +section{パラメータの変更}<%
+    +p{
+      Enumitem パッケージにおいて，箇条書きに関する体裁の多くは
+      今までに述べてきた方法でカスタマイズすることができます．
+      しかし，中にはわざわざ関数をユーザ定義するのではなく，もっと簡潔に
+      設定してしまいたいパラメータもあるでしょう．
+      そのようなニーズに対応するため，
+      いくつかのパラメータはユーザが直接値を指定することができます．
+    }
+
+    +subsection{パラメータの種類}<%
+      +p{
+        現時点で定義されているパラメータの一覧です．
+      }
+
+      +parameters{
+        * item-indent-ratio
+          ** float 型のパラメータ (default: 2.0)
+          ** 現在のフォントサイズに対する相対的な割合を指定して，
+             箇条書きのネストが行われたときに，自分の親の項目から行うインデントの量を表す．
+
+        * label-width-ratio
+          ** float 型のパラメータ (default: 2.0)
+          ** 現在のフォントサイズに対する相対的な割合を指定して，
+             デフォルトで定義されている `raw-arabic` や `bullet` などのラベルの幅を表す．
+             これらのラベルは右揃えで組まれるが，
+             その際に必ず (`font-size *' label-width-ratio`) の分だけの空白が左端から確保される．
+      }
+
+      +p{
+        「float 型のパラメータ」 と便宜上書いているものは，
+        正確には `Param` モジュールにて定義された `float Param.t` という型です．
+        パラメータを指定したりデフォルト値を設定したりするインターフェースが用意されているものの，
+        基本的には `float ref` と似たような型である，という理解で問題ありません．
+      }
+    >%
+
+    +subsection{パラメータの指定方法}<%
+      +p{
+        これらのパラメータを指定する方法はいくつかあります．
+        1つ目は，プリアンブル部分で以下のように指定する方法です．
+      }
+    >%
+
+    +code(```
+      let () = Enumitem.item-indent-ratio |> Param.set 5.0
+    ```);
+
+    +p{
+      このように書くと，
+      本文中では常に `item-indent-ratio` の値が 5.0 であるものとして組まれます．
+      `Param.set` は `'a -> 'a Param -> unit` 型を持つ関数で，
+      指定したパラメータに特定の値を代入することができます．
+    }
+
+    +p{
+      もし本文の途中でパラメータを変更したくなった場合は，
+      `+set-param` や `\with-param` コマンドを
+      ブロックテキスト/インラインテキストの途中に挿入することができます．
+    }
+
+    +example(```
+      +listing{
+        * hogehoge
+        * fugafuga
+      }
+      +set-param(label-width-ratio)(4.0);
+      +p{ここからラベルの幅が広くなる．}
+      +listing{
+        * hogehoge
+        * fugafuga
+      }
+      +set-param(label-width-ratio)(1.0);
+      +p{ここからラベルの幅が狭くなる．}
+      +listing{
+        * hogehoge
+        * fugafuga
+      }
+    ```)<%
+      +listing{
+        * hogehoge
+        * fugafuga
+      }
+      +set-param(label-width-ratio)(4.0);
+      +p{ここからラベルの幅が広くなる．}
+      +listing{
+        * hogehoge
+        * fugafuga
+      }
+      +p{ここからラベルの幅が狭くなる．\set-param(label-width-ratio)(1.0);}
+      +listing{
+        * hogehoge
+        * fugafuga
+      }
+    >%
+    +set-param(label-width-ratio)(2.0);
+
+    +p{
+      しかし，パラメータを途中から永続的に変えるのは，
+      後ろの原稿に思わぬ影響を与えうるという点で多少リスキーでもあります．
+      Param モジュールでは，一時的にパラメータの値を変更するインターフェースも用意されています．
+      以下の `+with-param` や `\with-param` コマンドを用います．
+    }
+    +example(```
+      +listing{
+        * hogehoge
+        * fugafuga
+      }
+      +with-param(label-width-ratio)(4.0)<
+        +p{ここだけラベルの幅が広くなる．}
+        +listing{
+          * hogehoge
+          * fugafuga
+        }
+      >
+      +p{ここはラベルの幅が前と同じ．}
+      +listing{
+        * hogehoge
+        * fugafuga
+      }
+    ```)<%
+      +listing{
+        * hogehoge
+        * fugafuga
+      }
+      +with-param(label-width-ratio)(4.0)<
+        +p{ここだけラベルの幅が広くなる．}
+        +listing{
+          * hogehoge
+          * fugafuga
+        }
+      >
+      +p{ここはラベルの幅が前と同じ．}
+      +listing{
+        * hogehoge
+        * fugafuga
+      }
+    >%
+
+  >%
+
+  +section{動的なフラグを用いたラベル操作}<%
+    +subsection{`+xgenlisting` コマンド}<%
       +p{
         たとえば，以下のような To-Do リストを作成したくなったとします．
       }
 
-      +block-frame<
+      +block-frame<%
         +todo-list{
           * ミルクを買う．
           * The \SATySFi;book を読む．
           * \done; \SATySFi; を完全に理解する．
           * 課題を解く．
         }
-      >
+      >%
 
       +p{
         ここで，ラベルを作成するための関数は既に用意されているものとします．
@@ -792,8 +1116,8 @@ document (|
         ラベルの体裁そのものを変えたり，と多彩なカスタマイズが可能となります．
       }
 
-    >
-    +subsection{`+xgenlisting` の注意点}<
+    >%
+    +subsection{`+xgenlisting` の注意点}<%
 
       +p{
         `+xgenlisting` は便利なコマンドですが， `+genlisting` にはない欠点が存在します．
@@ -827,11 +1151,10 @@ document (|
         `+xgenlisting` の中に入れると，このことによって挙動がおかしくなるのです．
       }
 
-    >
-  >
+    >%
+  >%
 
-  +section?:(`sse:description`){定義リストの作成}<
-
+  +section?:(`sse:description`){定義リストの作成}<%
     +p{
       \LaTeX; や HTML において標準で用意されている箇条書きは3種類ありました．
       順序なしリスト（番号のない箇条書き），順序リスト（番号付き箇条書き），
@@ -873,13 +1196,33 @@ document (|
       具体例を以下に示します．
     }
 
-      +example(```
+    +example(```
+    +gendescription(|
+      nextline = false;
+      title-inner-gap = 10pt;
+      inner-indent = (fun title-wid -> title-wid);
+      title-func =
+        (fun ctx title -> read-inline ctx {\textbf{#title;}} );
+    |){
+      * 英語のパングラム
+        ** The quick brown fox jumps over the lazy dog.
+
+      * 日本語のパングラム
+        ** いろはにほへとちりぬるを
+           わかよたれそつねならむ
+           うゐのおくやまけふこえて
+           あさきゆめみしゑひもせすん
+        ** いろはにほへとちりぬるを
+           わかよたれそつねならむ
+           うゐのおくやまけふこえて
+           あさきゆめみしゑひもせすん
+    }
+    ```)<%
       +gendescription(|
         nextline = false;
         title-inner-gap = 10pt;
         inner-indent = (fun title-wid -> title-wid);
-        title-func =
-          (fun ctx title -> read-inline ctx {\textbf{#title;}} );
+        title-func = (fun ctx title -> read-inline ctx {\emph{#title;}});
       |){
         * 英語のパングラム
           ** The quick brown fox jumps over the lazy dog.
@@ -894,125 +1237,99 @@ document (|
              うゐのおくやまけふこえて
              あさきゆめみしゑひもせすん
       }
-      ```)<
-        +gendescription(|
-          nextline = false;
-          title-inner-gap = 10pt;
-          inner-indent = (fun title-wid -> title-wid);
-          title-func = (fun ctx title -> read-inline ctx {\emph{#title;}});
-        |){
-          * 英語のパングラム
-            ** The quick brown fox jumps over the lazy dog.
+    >%
 
-          * 日本語のパングラム
-            ** いろはにほへとちりぬるを
-               わかよたれそつねならむ
-               うゐのおくやまけふこえて
-               あさきゆめみしゑひもせすん
-            ** いろはにほへとちりぬるを
-               わかよたれそつねならむ
-               うゐのおくやまけふこえて
-               あさきゆめみしゑひもせすん
-        }
-      >
+    +p{
+      具体例を見れば分かる通り，
+      \code(`+genlisting`); などのコマンドとはかなりインターフェースが異なります．
+      \code(`+gendescription`); は2つの引数 \code(`record`); と \code(`inner`); をとり，
+      \code(`record`); で description コマンドの体裁を設定し，
+      \code(`inner`); に表示したい内容を並べます．
+    }
 
-      +p{
-        具体例を見れば分かる通り，
-        \code(`+genlisting`); などのコマンドとはかなりインターフェースが異なります．
-        \code(`+gendescription`); は2つの引数 \code(`record`); と \code(`inner`); をとり，
-        \code(`record`); で description コマンドの体裁を設定し，
-        \code(`inner`); に表示したい内容を並べます．
+    +p{
+      \SATySFi; には現在，\LaTeX; の \code(`\item[label]`); のように
+      箇条書きの item 毎にラベルを変更するためのマークアップを提供していません．
+      そこで， \code(`+gendescription`); コマンドでは
+      \code(`inner`); 部分を以下のように定めることで，
+      \SATySFi; の箇条書き構文のインターフェースに沿った定義リストを実現しました．
+      \listing{
+        * 1番目の深さの item （ \code(`*`); が1つ並んでいるところ）に，
+          定義リストの各 item に相当する見出しを書く．
+
+        * 各見出しの子に相当する item （ \code(`*`); が2つ並んでいるところ）に，
+          定義リストの本文を書く．
+          複数の子 item を同じ親の下に並べて書くことで，複数の段落を記述することができる．
       }
+      説明を読むよりも前述の具体例を見たほうが使用法が掴みやすいでしょう．
+    }
 
-      +p{
-        \SATySFi; には現在，\LaTeX; の \code(`\item[label]`); のように
-        箇条書きの item 毎にラベルを変更するためのマークアップを提供していません．
-        そこで， \code(`+gendescription`); コマンドでは
-        \code(`inner`); 部分を以下のように定めることで，
-        \SATySFi; の箇条書き構文のインターフェースに沿った定義リストを実現しました．
-        \listing{
-          * 1番目の深さの item （ \code(`*`); が1つ並んでいるところ）に，
-            定義リストの各 item に相当する見出しを書く．
+    +p{
+      また，\code(`+gendescription`); コマンドでは第1引数でレコードを渡すことにより，
+      柔軟に定義リストを構成することができます．
+      レコードの値は4種類あり，
+      これらは全てオプションではなく必須引数です．
+    }
 
-          * 各見出しの子に相当する item （ \code(`*`); が2つ並んでいるところ）に，
-            定義リストの本文を書く．
-            複数の子 item を同じ親の下に並べて書くことで，複数の段落を記述することができる．
-        }
-        説明を読むよりも前述の具体例を見たほうが使用法が掴みやすいでしょう．
-      }
+    +parameters{
+      * nextline
+        ** (`bool`)
+        ** 各 item のタイトルと本文の間に改行を挟むかどうか．
+           true ならば改行を行う． false ならば改行を行わない．
 
-      +p{
-        また，\code(`+gendescription`); コマンドでは第1引数でレコードを渡すことにより，
-        柔軟に定義リストを構成することができます．
-        レコードの値は4種類あり，
-        これらは全てオプションではなく必須引数です．
-      }
+      * title-inner-gap
+        ** (`length`)
+        ** 各 item のタイトルと本文の間に挿入する最小の空白幅．
+           どちらかというと「各 item のタイトルの右に常においておく余白」
+           というイメージが近い．
 
+      * inner-indent
+        ** (`length -> length`)
+        ** 「タイトルの幅を引数として，本文インデント量を返す関数」を指定する．
+           わざわざ関数を指定するようにしているのは，
+           タイトル幅に応じてインデントを動的に変えられるようにするため．
+           たとえば \code(`(fun _ -> 10pt)`); を指定すれば，
+           本文ではタイトルの幅の長さに関わらず常に 10pt のインデントが行われる
+           （ただし，タイトルが記述されている行を除く）．
+           また，\code(`(fun title-wid -> title-wid)`); を指定すれば，
+           タイトル幅（title-inner-gap を含む）と同じだけのインデントが行われる．
+
+      * title-func
+        ** (`context -> inline-text -> inline-boxes`)
+        ** 「テキスト処理文脈及びタイトルのインラインテキストを引数として，
+           タイトルのインラインボックス列を返す関数」を指定する．
+           最も簡単なのは \code(`read-inline`); 関数をそのまま指定すること．
+           この関数内部で \code(`\textbf`); のコマンドを挟んだり，
+           テキスト処理文脈をいじってフォントを変更したりすることで，
+           各 item のタイトルだけを太字にする，といった処理が可能になる．
+    }
+
+    +p{
+      定義リストを書くたびにこれら4つの要素が埋まったレコードを指定しなければならない面倒だ，
+      と感じたかもしれません．尤もです．
+      しかし例によって，プリアンブルで \SATySFi; のコマンド定義を適切に行えば，
+      面倒な記述を一度書くだけでよくなります．
+      たとえばデフォルトで用意されている \code(`+description`); コマンドは
+      以下のように定義されています．
+    }
+
+    +code(```
+    let-block +description item = '<
       +gendescription(|
-        nextline = false;
-        title-inner-gap = 10pt;
+        nextline = true;
+        title-inner-gap = 5pt;
         inner-indent = (fun title-wid -> 20pt);
-        title-func =
-          (fun ctx title -> read-inline ctx {\emph{#title;}} );
-      |){
-        * nextline
-          ** (`bool`)
-          ** 各 item のタイトルと本文の間に改行を挟むかどうか．
-             true ならば改行を行う． false ならば改行を行わない．
-
-        * title-inner-gap
-          ** (`length`)
-          ** 各 item のタイトルと本文の間に挿入する最小の空白幅．
-             どちらかというと「各 item のタイトルの右に常においておく余白」
-             というイメージが近い．
-
-        * inner-indent
-          ** (`length -> length`)
-          ** 「タイトルの幅を引数として，本文インデント量を返す関数」を指定する．
-             わざわざ関数を指定するようにしているのは，
-             タイトル幅に応じてインデントを動的に変えられるようにするため．
-             たとえば \code(`(fun _ -> 10pt)`); を指定すれば，
-             本文ではタイトルの幅の長さに関わらず常に 10pt のインデントが行われる
-             （ただし，タイトルが記述されている行を除く）．
-             また，\code(`(fun title-wid -> title-wid)`); を指定すれば，
-             タイトル幅（title-inner-gap を含む）と同じだけのインデントが行われる．
-
-        * title-func
-          ** (`context -> inline-text -> inline-boxes`)
-          ** 「テキスト処理文脈及びタイトルのインラインテキストを引数として，
-             タイトルのインラインボックス列を返す関数」を指定する．
-             最も簡単なのは \code(`read-inline`); 関数をそのまま指定すること．
-             この関数内部で \code(`\textbf`); のコマンドを挟んだり，
-             テキスト処理文脈をいじってフォントを変更したりすることで，
-             各 item のタイトルだけを太字にする，といった処理が可能になる．
-      }
-
-      +p{
-        定義リストを書くたびにこれら4つの要素が埋まったレコードを指定しなければならない面倒だ，
-        と感じたかもしれません．尤もです．
-        しかし例によって，プリアンブルで \SATySFi; のコマンド定義を適切に行えば，
-        面倒な記述を一度書くだけでよくなります．
-        たとえばデフォルトで用意されている \code(`+description`); コマンドは
-        以下のように定義されています．
-      }
-
-      +code(```
-      let-block +description item = '<
-        +gendescription(|
-          nextline = true;
-          title-inner-gap = 5pt;
-          inner-indent = (fun title-wid -> 20pt);
-          title-func = read-inline;
-        |)(item);
-      >
-      ```);
-  >
+        title-func = read-inline;
+      |)(item);
+    >
+    ```);
+  >%
 
 
-  +section{おわりに}<
+  +section{おわりに}<%
     +p{
       バグ報告・PR などお待ちしています．
     }
-  >
+  >%
 
->
+>%

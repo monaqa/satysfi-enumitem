@@ -294,6 +294,14 @@ module Enumitem : sig
   % item constructor
   val default-item : context -> int -> inline-boxes -> inline-text -> block-boxes
 
+  % description config
+  val desc-config: (|
+    nextline : bool;
+    title-inner-gap : length;
+    inner-indent : length -> length;
+    title-func : context -> inline-text -> inline-boxes;
+  |)
+
   % default commands
   direct +listing    : [labelfmt?; itemize] block-cmd
   direct +enumerate  : [labelfmt?; itemize] block-cmd
@@ -301,6 +309,10 @@ module Enumitem : sig
   direct \listing    : [labelfmt?; itemize] inline-cmd
   direct \enumerate  : [labelfmt?; itemize] inline-cmd
   direct \description: [itemize] inline-cmd
+
+  % parameters
+  val label-width-ratio: float Param.t
+  val item-indent-ratio: float Param.t
 
 end = struct
 
@@ -359,10 +371,10 @@ end = struct
 
   % index decolation
 
-  let label-width-ratio = 2.0  % ラベル幅: item-indent からラベル幅だけシフトした場所から本文が始まる
+  let label-width-ratio = Param.make 2.0  % ラベル幅: item-indent からラベル幅だけシフトした場所から本文が始まる
 
   let raw num-format idxlst ctx =
-    let label-width = (get-font-size ctx) *' label-width-ratio in
+    let label-width = (get-font-size ctx) *' (Param.get label-width-ratio) in
     let idx = idxlst |> List.nth 0 |> Option.from 1 in
     let it-num = num-format idx in
     let ib-label = read-inline ctx {#it-num;\ } in
@@ -370,7 +382,7 @@ end = struct
     inline-skip (label-width -' wid-label) ++ ib-label
 
   let dot num-format idxlst ctx =
-    let label-width = (get-font-size ctx) *' label-width-ratio in
+    let label-width = (get-font-size ctx) *' (Param.get label-width-ratio) in
     let idx = idxlst |> List.nth 0 |> Option.from 1 in
     let it-num = num-format idx in
     let ib-label = read-inline ctx {#it-num;.\ } in
@@ -378,7 +390,7 @@ end = struct
     inline-skip (label-width -' wid-label) ++ ib-label
 
   let paren num-format idxlst ctx =
-    let label-width = (get-font-size ctx) *' label-width-ratio in
+    let label-width = (get-font-size ctx) *' (Param.get label-width-ratio) in
     let idx = idxlst |> List.nth 0 |> Option.from 1 in
     let it-num = num-format idx in
     let ib-label = read-inline ctx {(#it-num;)\ } in
@@ -386,7 +398,7 @@ end = struct
     inline-skip (label-width -' wid-label) ++ ib-label
 
   let bracket num-format idxlst ctx =
-    let label-width = (get-font-size ctx) *' label-width-ratio in
+    let label-width = (get-font-size ctx) *' (Param.get label-width-ratio) in
     let idx = idxlst |> List.nth 0 |> Option.from 1 in
     let it-num = num-format idx in
     let ib-label = read-inline ctx {[#it-num;]\ } in
@@ -396,7 +408,7 @@ end = struct
 
   let shape-bullet ctx =
     let font-size = get-font-size ctx in
-    let label-width = font-size *' label-width-ratio in
+    let label-width = font-size *' (Param.get label-width-ratio) in
     let interval = font-size *' 0.3 in
     let circ ctx (x, y) =
       let cx = x +' label-width -' (font-size *' 0.3) -' interval in
@@ -404,12 +416,12 @@ end = struct
       let r = font-size *' 0.15 in
       Gr.circle (cx, cy) r
     in
-    inline-graphics label-width 8pt 0pt
+    inline-graphics label-width (font-size *' 0.5) 0pt
       (fun (x, y) -> [fill Color.black (circ ctx (x, y))])
 
   let shape-white-bullet ctx =
     let font-size = get-font-size ctx in
-    let label-width = font-size *' label-width-ratio in
+    let label-width = font-size *' (Param.get label-width-ratio) in
     let interval = font-size *' 0.3 in
     let circ ctx (x, y) =
       let cx = x +' label-width -' (font-size *' 0.3) -' interval in
@@ -417,8 +429,8 @@ end = struct
       let r = font-size *' 0.12 in
       Gr.circle (cx, cy) r
     in
-    inline-graphics label-width 8pt 0pt
-      (fun (x, y) -> [stroke 1pt Color.black (circ ctx (x, y))])
+    inline-graphics label-width (font-size *' 0.5) 0pt
+      (fun (x, y) -> [stroke 0.8pt Color.black (circ ctx (x, y))])
 
   % labels
 
@@ -450,10 +462,6 @@ end = struct
   let white-bullet _ = shape-white-bullet
 
 
-  % ひとまずモジュール共通の Param としておく．
-  % ゆくゆくはコマンド引数にレコードの形で指定させるようにするかも
-  let item-indent-ratio = Param.make 1.5
-
   let change-by-depth labelflst idxlst ctx =
     let dpt = List.length idxlst - 1 in
     let labelf-len = List.length labelflst in
@@ -463,21 +471,23 @@ end = struct
       let labelf = labelflst |> List.nth dpt |> Option.from bullet in
       labelf idxlst ctx
 
+  let item-indent-ratio = Param.make 2.0
+
   % 現在の context, 階層の深さ，ラベル，本文を指定して箇条書きの1つのアイテムを組み上げる．
-  let default-item ctx depth ib-label parent =
-    let parent-indent =
+  let default-item ctx depth ib-label text =
+    let text-indent =
       let fsize = get-font-size ctx in
       fsize *' ((Param.get item-indent-ratio) *. (float depth))
     in
-    let ib-parent-text =
+    let ib-text =
       let index-width = get-natural-width ib-label in
-      let item-text-width = ((get-text-width ctx) -' parent-indent -' index-width) in
+      let item-text-width = (get-text-width ctx) -' text-indent -' index-width in
       embed-block-top ctx item-text-width (fun ctx ->
-        line-break true true ctx (read-inline ctx parent ++ inline-fil)
+        line-break true true ctx (read-inline ctx text ++ inline-fil)
       )
     in
     line-break true true ctx
-      ((inline-skip parent-indent) ++ ib-label ++ ib-parent-text)
+      ((inline-skip text-indent) ++ ib-label ++ ib-text)
 
 
   let-block ctx +listing ?:labelf item =
@@ -495,13 +505,15 @@ end = struct
     let labelf = Option.from default-enum-rule labelf in
     read-block ctx '< +genlisting(labelf)(default-item)(item); >
 
+  let desc-config = (|
+    nextline = true;
+    title-inner-gap = 5pt;
+    inner-indent = (fun title-wid -> 20pt);
+    title-func = read-inline;
+  |)
+
   let-block +description item = '<
-    +gendescription(|
-      nextline = true;
-      title-inner-gap = 5pt;
-      inner-indent = (fun title-wid -> 20pt);
-      title-func = read-inline;
-    |)(item);
+    +gendescription(desc-config)(item);
   >
 
   let-inline ctx \listing ?:labelf item =
