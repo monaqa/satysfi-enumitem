@@ -58,7 +58,7 @@ let-inline \jugem = {
 let tmp-label = EnumitemBase.make-param bullet
 let-inline \label labelf = {\set-item(tmp-label)(labelf);}
 let-block +label-demo item = '<%
-  +xgenlisting(fun idx ctx -> (Param.get tmp-label) idx ctx)(default-item)(item);
+  +xgenlisting(fun idx ctx -> (EnumitemParam.get tmp-label) idx ctx)(default-item)(item);
 >%
 
 let square-label is-checked ctx =
@@ -84,7 +84,7 @@ let square-label is-checked ctx =
 let done = EnumitemBase.make-param false
 let-inline \done = {\set-item(done)(true);}
 let-block +todo-list item = '<%
-  +xgenlisting(fun idx ctx -> square-label (Param.get done) ctx)(default-item)(item);
+  +xgenlisting(fun idx ctx -> square-label (EnumitemParam.get done) ctx)(default-item)(item);
 >%
 
 let example idxlst ctx =
@@ -794,7 +794,7 @@ document (|
         let default-item ctx depth ib-label text =
           let text-indent =
             let fsize = get-font-size ctx in
-            fsize *' ((Param.get item-indent-ratio) *. (float depth))
+            fsize *' ((EnumitemParam.get item-indent-ratio) *. (float depth))
           in
           let ib-text =
             let index-width = get-natural-width ib-label in
@@ -911,7 +911,7 @@ document (|
 
       +p{
         「float 型のパラメータ」 と便宜上書いているものは，
-        正確には `Param` モジュールにて定義された `float Param.t` という型です．
+        正確には `EnumitemParam` モジュールにて定義された `float EnumitemParam.t` という型です．
         パラメータを指定したりデフォルト値を設定したりするインターフェースが用意されているものの，
         基本的には `float ref` と似たような型である，という理解で問題ありません．
       }
@@ -932,13 +932,13 @@ document (|
     >%
 
     +code(```
-      let () = Enumitem.item-indent-ratio |> Param.set 5.0
+      let () = Enumitem.item-indent-ratio |> EnumitemParam.set 5.0
     ```);
 
     +p{
       このように書くと，
       本文中では常に `item-indent-ratio` の値が 5.0 であるものとして組まれます．
-      `Param.set` は `'a -> 'a Param -> unit` 型を持つ関数で，
+      `EnumitemParam.set` は `'a -> 'a EnumitemParam.t -> unit` 型を持つ関数で，
       指定したパラメータに特定の値を代入することができます．
     }
 
@@ -1118,7 +1118,7 @@ document (|
       let-inline \done = {\set-item(done)(true);}
       let-block +todo-list item = '<
         +xgenlisting
-          (fun idx ctx -> square-label (Param.get done) ctx)
+          (fun idx ctx -> square-label (EnumitemParam.get done) ctx)
             (default-item)(item);
       >
       ```);
@@ -1159,8 +1159,8 @@ document (|
         * `EnumitemBase` というモジュールの `make-param` 関数を用いて，
           箇条書きのアイテム内で一時的な値を保持するための器（ローカルパラメータ）を定義することができる．
         * ローカルパラメータには，本文中で `\set-item(param)(value);` と打つことで一時的に値を設定することができる．
-        * `+xgenlisting` を使うと，第1引数でラベルの体裁を指定する際に，
-          `Param.get` 関数でパラメータの値を受け取り，その値に応じてラベルの出力を変更することができる．
+        * `+xgenlisting` を使うと，ラベルの体裁を指定する際に
+          `EnumitemParam.get` 関数でパラメータの値を受け取り，その値に応じてラベルの出力を変更することができる．
         * `\set-item` で変更した値はその項目が終わると破棄され，デフォルト値にもどる．
       }
 
