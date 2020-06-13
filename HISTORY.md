@@ -1,5 +1,12 @@
 # HISTORY
 
+## 2.0.0 (2020-06-13)
+
+* change interfaces
+* add xgenlisting command
+* add global parameters
+* register satysfi-enumitem-doc package for Satyrographos
+
 ## 1.1.0 (2020-02-24)
 
 * add description commands

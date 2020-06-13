@@ -1,5 +1,5 @@
 opam-version: "2.0"
-name: "satysfi-enumitem"
+name: "satysfi-enumitem-doc"
 version: "2.0.0"
 synopsis: "A SATySFi package for creating itemized lists"
 description: """A SATySFi package for creating itemized lists."""
@@ -23,3 +23,4 @@ install: [
    "-prefix" "%{prefix}%"
    "-script" "%{build}%/Satyristes"]
 ]
+
