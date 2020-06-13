@@ -21,7 +21,7 @@ First you should install Satyrographos
 and then type in your terminal as follows:
 
 ```
-opam install satysfi-class-slydifi
+opam install satysfi-enumitem
 satyrographos install
 ```
 

@@ -22,7 +22,7 @@ Satyrographos そのものをインストールした後（詳細は
 ターミナルで以下のように叩けばインストールされます:
 
 ```
-opam install satysfi-class-slydifi
+opam install satysfi-enumitem
 satyrographos install
 ```
 
