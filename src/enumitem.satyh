@@ -10,6 +10,7 @@ type itemstyle = int list -> context -> (|
   first-line-left-indent: length;
   right-indent: length;
   inner-context: context -> context;
+  increment: int;
 |)
 
 module Enumitem: sig
@@ -18,12 +19,16 @@ module Enumitem: sig
   val alph : itemstyle
   val no-label : itemstyle
 
-  val item : itemstyle -> context -> inline-text -> block-text -> block-boxes
-  direct +item : [itemstyle?; inline-text; itemstyle?; block-text] block-cmd
-  direct +itemize : [itemstyle; block-text] block-cmd
+  % val item : itemstyle -> context -> inline-text -> block-text -> block-boxes
+  % direct +item : [itemstyle?; inline-text; itemstyle?; block-text] block-cmd
+  % direct +itemize : [itemstyle; block-text] block-cmd
+  direct +itemize2 : [itemstyle; inline-text] block-cmd
+  % 
+  % direct +listing : [itemstyle?; itemize] block-cmd
+  % direct \listing : [itemstyle?; itemize] inline-cmd
 
-  direct +listing : [itemstyle?; itemize] block-cmd
-  direct \listing : [itemstyle?; itemize] inline-cmd
+  direct \item : [itemstyle?; inline-text] inline-cmd
+  direct \set-counter : [int] inline-cmd
 
 end = struct
 
@@ -36,20 +41,28 @@ end = struct
     `counter:` ^ (aux ` ` !counter-stack) |> display-message
 
   let push-counter () =
-    match !counter-stack with
-    | 0 :: rest -> false
-    | _ -> let () = counter-stack <- 0 :: !counter-stack in true
+    % match !counter-stack with
+    % | 1 :: rest -> false
+    % | _ -> let () = counter-stack <- 1 :: !counter-stack in true
+    counter-stack <- 1 :: !counter-stack
 
-  let inc-counter () = counter-stack <- (
+  let inc-counter n = counter-stack <- (
     match !counter-stack with
     | [] -> []
-    | x :: rest -> (x + 1) :: rest
+    | x :: rest -> (x + n) :: rest
   )
   let pop-counter () = counter-stack <- (
     match !counter-stack with
     | [] -> []
     | x :: rest -> rest
   )
+  let set-counter n = counter-stack <- (
+    match !counter-stack with
+    | [] -> []
+    | x :: rest -> n :: rest
+  )
+
+  let-inline \set-counter n = let () = set-counter n in {}
 
   let default-style idxlst ctx =
     let it =
@@ -58,12 +71,14 @@ end = struct
     in
     let ib-label = read-inline ctx {[#it;]} in
     let (w, _, _) = get-natural-metrics ib-label in
+
     (|
     label = ib-label;
     left-indent = 20pt;
     first-line-left-indent = w +' 10pt;
     right-indent = 0pt;
     inner-context = (fun x -> x);
+    increment = 1;
   |)
 
   let alph idxlst ctx =
@@ -73,6 +88,7 @@ end = struct
     first-line-left-indent = 20pt;
     right-indent = 0pt;
     inner-context = (fun x -> x);
+    increment = 0;
   |)
 
   let no-label idxlst ctx =
@@ -82,96 +98,80 @@ end = struct
     first-line-left-indent = 20pt;
     right-indent = 0pt;
     inner-context = (fun x -> x);
+    increment = 0;
   |)
 
   let item-style = EnumitemParam.make default-style
 
   let deco-none _ _ _ _ = []
 
-  let item style ctx it inner =
-    % カウンタを1あげる
-    let () = inc-counter () in
-    let record = style !counter-stack ctx in
+  let-inline ctx \item ?:style it =
+    let style = style |> Option.from (EnumitemParam.get item-style) in
 
-    let is-empty ib =
-      let (w, h, d) = get-natural-metrics ib in
-      Length.(w == 0pt && h == 0pt && d == 0pt)
-    in
+    let bb =
+      let () = display-counter () in
+      let record = style !counter-stack ctx in
 
-    let ib-label = record#label in
-    let (wid-label, _, _) = get-natural-metrics ib-label in
-    let left-indent = record#left-indent in
-    let pads = (left-indent, record#right-indent, 0pt, 0pt) in
-
-    let bbf ctx =
-      let ib-label =
-        (inline-skip (0pt -' left-indent))
-        ++ ib-label
-        ++ (inline-skip (record#first-line-left-indent -' wid-label))
+      let is-empty ib =
+        let (w, h, d) = get-natural-metrics ib in
+        Length.(w == 0pt && h == 0pt && d == 0pt)
       in
 
-      let ctx-child = record#inner-context ctx in
+      let ib-label = record#label in
+      let (wid-label, _, _) = get-natural-metrics ib-label in
+      let left-indent = record#left-indent in
+      let pads = (left-indent, record#right-indent, 0pt, 0pt) in
 
-      let bb-par =
-        let ib-par = read-inline ctx-child it in
-        if (is-empty ib-par && is-empty ib-label) then
-          block-nil
-        else
-          line-break true true ctx-child (ib-label ++ ib-par ++ inline-fil)
+      let bbf ctx =
+
+        let ib-label =
+          (inline-skip (0pt -' left-indent))
+            ++ ib-label
+              ++ (inline-skip (record#first-line-left-indent -' wid-label))
+        in
+
+        let ctx-child = record#inner-context ctx in
+
+        let bb-par =
+          % 事前準備
+          let () = push-counter () in
+          let ib-par = read-inline ctx-child it in
+          % 後始末
+          let () = pop-counter () in
+          % カウンタを1あげる
+          let () = inc-counter record#increment in
+
+          if (is-empty ib-par && is-empty ib-label) then
+            block-nil
+          else
+            line-break true true ctx-child (ib-label ++ ib-par ++ inline-fil)
+        in
+
+        bb-par
       in
 
-      let bb-child = read-block ctx-child inner in
-
-      bb-par +++ bb-child
+      block-frame-breakable ctx pads (deco-none, deco-none, deco-none, deco-none) bbf
     in
 
-    block-frame-breakable ctx pads (deco-none, deco-none, deco-none, deco-none) bbf
+    inline-fil ++ embed-block-breakable ctx bb ++ omit-skip-after
 
-  let-block ctx +itemize style bt =
+  let-block ctx +itemize2 style inner =
     % 事前準備
-    let push-success = push-counter () in
+    let () = push-counter () in
     let old-style = EnumitemParam.get item-style in
     let () = item-style |> EnumitemParam.set style in
 
-    let bb = read-block ctx bt in
+    let ib = read-inline ctx inner in
 
     % 後始末
     let () = item-style |> EnumitemParam.set old-style in
-    let () = if push-success then pop-counter () else () in
+    let () = pop-counter () in
 
-    % bb
-    if Length.(get-natural-length bb == 0pt) then
-      block-nil
-    else
-      let ctx = ctx |> set-paragraph-margin 20pt 20pt in
-      block-frame-breakable ctx (0pt, 0pt, 0pt, 0pt) (deco-none, deco-none, deco-none, deco-none) (fun _ -> bb)
-
-  let-block ctx +item ?:style it ?:inner-style bt =
-    let style = style |> Option.from (EnumitemParam.get item-style) in
-    let inner-style = inner-style |> Option.from style in
-    item style ctx it '< +itemize(inner-style)(bt); >
-
-  let itemize-to-item (Item( _, children )) =
-    let-rec aux (Item( it, children )) =
-      let bt = children
-        |> List.map aux
-        |> List.fold-left (fun a b -> '<#a;#b;>) '<>
-      in
-      '< +item(it)(bt); >
+    let bbf ctx =
+      line-break true true ctx (ib ++ inline-fil)
     in
-    children |> List.map aux |> List.fold-left (fun a b -> '<#a;#b;>) '<>
 
-
-  let-block ctx +listing ?:style itemize =
-    let style = style |> Option.from default-style in
-    read-block ctx '<
-      +itemize(style)(itemize-to-item itemize);
-    >
-
-  let-inline ctx \listing ?:style itemize =
-    let style = style |> Option.from default-style in
-    inline-fil ++ embed-block-breakable ctx (read-block ctx '<+listing?:(style)(itemize);>) ++ omit-skip-after
-
+    block-frame-breakable ctx (0pt, 0pt, -10pt, 0pt) (deco-none, deco-none, deco-none, deco-none) bbf
 end
 
 %% 標準的なラベルを作成するためのビルダー。

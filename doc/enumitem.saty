@@ -61,67 +61,100 @@ document (|
   show-toc = true;
 |) '<%
 
-  +p{\jugem;}
+  % +p{\jugem;}
+  % 
+  % +listing{
+  %   * foo
+  %   * bar
+  %   * piyo
+  %     ** piyopiyo
+  %     ** piyopiyo
+  %       *** piyopiyo
+  %       *** piyopiyo
+  %     ** piyopiyo
+  % 
+  %        \listing{
+  %          * piyopiyo
+  %          * piyopiyo
+  %        }%
+  % 
+  %          * aaa
+  % }
+  % 
+  % +p{\jugem;}
+  % 
+  % +itemize(Enumitem.default-style)<
+  % 
+  %   +item{
+  %     \jugem;
+  %   }<
+  %     +item{bbb}<>
+  %     +item{\jugem;}<>
+  %     +item?:(Enumitem.no-label){hoge fuga}<
+  %     >
+  %     +item{途中で挟まる例}<
+  %       +item{tekito}<>
+  %       +item{tekito}<>
+  %     >
+  %     +p{\jugem;}
+  %     +item{bcc}<>
+  %   >
+  %   +item{\jugem;}<
+  %     +p{
+  %       \jugem;
+  %     }
+  %   >
+  %   +item{\jugem;}<>
+  %   +item?:(Enumitem.no-label){\jugem;}<>
+  % 
+  %   +item({\jugem;})?:(Enumitem.alph)<
+  % 
+  %     +item{\jugem;}<>
+  % 
+  %   >
+  % 
+  %   +item{\jugem;}<
+  % 
+  %     % +item{\jugem;}<>
+  % 
+  %       +item{\jugem;}<>
+  %       +item{\jugem;}<>
+  % 
+  %   >
+  % 
+  % >
 
-  +listing{
-    * foo
-    * bar
-    * piyo
-      ** piyopiyo
-      ** piyopiyo
-        *** piyopiyo
-        *** piyopiyo
-      ** piyopiyo
+  +p{AAA}
 
-         \listing{
-           * piyopiyo
-           * piyopiyo
-         }%
-
-           * aaa
-  }
-
-  +p{\jugem;}
-
-  +itemize(Enumitem.default-style)<
-
-    +item{
-      \jugem;
-    }<
-      +item{bbb}<>
-      +item{\jugem;}<>
-      +item?:(Enumitem.no-label){hoge fuga}<
-      >
-      +item{途中で挟まる例}<
-        +item{tekito}<>
-        +item{tekito}<>
-      >
-      +p{\jugem;}
-      +item{bcc}<>
-    >
-    +item{\jugem;}<
-      +p{
-        \jugem;
+  +itemize2(Enumitem.default-style){
+    \item{
+      \item{いきなり2つできる。まあこれは前から。}
+      たとえば。
+      \set-counter(1);
+      \item{\jugem;}
+      となる。他にも
+      \set-counter(1);
+      \item{bbb}
+      となる。
+      \item{bbb}
+      \item?:(Enumitem.no-label){これはラベルがないやつが1こだけ混じってる例}
+      \item{bbb}
+      \item{
+        CCC
+        \item{ddd}
+        \item{EEE}
+        FFF
       }
-    >
-    +item{\jugem;}<>
-    +item?:(Enumitem.no-label){\jugem;}<>
-
-    +item({\jugem;})?:(Enumitem.alph)<
-
-      +item{\jugem;}<>
-
-    >
-
-    +item{\jugem;}<
-
-      % +item{\jugem;}<>
-
-        +item{\jugem;}<>
-        +item{\jugem;}<>
-
-    >
-
-  >
+      GGG
+    }
+    \item{
+      \jugem;
+      \item{222}
+    }
+    \item{\jugem;\jugem;}
+    \item{HHH}
+    \item{HHH}
+  }
+  +p{AAA}
 
 >
