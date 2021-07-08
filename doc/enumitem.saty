@@ -124,37 +124,73 @@ document (|
   % 
   % >
 
-  +p{AAA}
+  % +p{AAA}
+  % 
+  % +itemize(Enumitem.default-style){
+  %   \item{
+  %     \item{いきなり2つできる。まあこれは前から。}
+  %     たとえば。
+  %     \set-counter(1);
+  %     \item{\jugem;}
+  %     となる。他にも
+  %     \set-counter(1);
+  %     \item{bbb}
+  %     となる。
+  %     \item{bbb}
+  %     \item?:(Enumitem.no-label){これはラベルがないやつが1こだけ混じってる例}
+  %     \item{bbb}
+  %     \item{
+  %       CCC
+  %       \item{ddd}
+  %       \item{EEE}
+  %       FFF
+  %     }
+  %     GGG
+  %   }
+  %   \item{
+  %     \jugem;
+  %     \item{222}
+  %   }
+  %   \item{\jugem;\jugem;}
+  %   \item{HHH}
+  %   \item{HHH}
+  % }
+  % +p{AAA}
 
-  +itemize2(Enumitem.default-style){
-    \item{
-      \item{いきなり2つできる。まあこれは前から。}
-      たとえば。
-      \set-counter(1);
-      \item{\jugem;}
-      となる。他にも
-      \set-counter(1);
-      \item{bbb}
-      となる。
-      \item{bbb}
-      \item?:(Enumitem.no-label){これはラベルがないやつが1こだけ混じってる例}
-      \item{bbb}
-      \item{
-        CCC
-        \item{ddd}
-        \item{EEE}
-        FFF
-      }
-      GGG
-    }
-    \item{
-      \jugem;
-      \item{222}
-    }
-    \item{\jugem;\jugem;}
-    \item{HHH}
-    \item{HHH}
+  +listing{
+    * \jugem;
+      ** foo
+      ** bar
+      ** piyo
+    * foo
+    * bar
+    * piyo
+      ** \jugem;
+      ** \jugem;
+        *** foo
+        *** bar
+    * \jugem;
   }
-  +p{AAA}
+
+  +listing{
+    * \jugem;
+      % ** foo
+      % ** bar
+      % ** piyo
+      \sublist?:(Enumitem.no-label){
+        * foo
+        * bar
+        * piyo
+          ** foo
+      }
+    * foo
+    * bar
+    * piyo
+      ** \jugem;
+      ** \jugem;
+        *** foo
+        *** bar
+    * \jugem;
+  }
 
 >

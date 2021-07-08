@@ -19,19 +19,19 @@ module Enumitem: sig
   val alph : itemstyle
   val no-label : itemstyle
 
-  % val item : itemstyle -> context -> inline-text -> block-text -> block-boxes
-  % direct +item : [itemstyle?; inline-text; itemstyle?; block-text] block-cmd
-  % direct +itemize : [itemstyle; block-text] block-cmd
-  direct +itemize2 : [itemstyle; inline-text] block-cmd
-  % 
-  % direct +listing : [itemstyle?; itemize] block-cmd
-  % direct \listing : [itemstyle?; itemize] inline-cmd
+  direct \set-counter : [int] inline-cmd
+
+  direct +itemize : [itemstyle; inline-text] block-cmd
+
+  direct +listing : [itemstyle?; itemize] block-cmd
+  direct \listing : [itemstyle?; itemize] inline-cmd
+  direct \sublist : [itemstyle?; itemize] inline-cmd
 
   direct \item : [itemstyle?; inline-text] inline-cmd
-  direct \set-counter : [int] inline-cmd
 
 end = struct
 
+% counter
   let-mutable counter-stack <- []
   let display-counter () =
     let-rec aux s lst = match lst with
@@ -64,6 +64,7 @@ end = struct
 
   let-inline \set-counter n = let () = set-counter n in {}
 
+% style
   let default-style idxlst ctx =
     let it =
       idxlst |> List.map (fun idx -> idx |> arabic |> embed-string)
@@ -101,9 +102,12 @@ end = struct
     increment = 0;
   |)
 
+% parameters
   let item-style = EnumitemParam.make default-style
 
   let deco-none _ _ _ _ = []
+
+% command
 
   let-inline ctx \item ?:style it =
     let style = style |> Option.from (EnumitemParam.get item-style) in
@@ -155,7 +159,7 @@ end = struct
 
     inline-fil ++ embed-block-breakable ctx bb ++ omit-skip-after
 
-  let-block ctx +itemize2 style inner =
+  let-block ctx +itemize style inner =
     % 事前準備
     let () = push-counter () in
     let old-style = EnumitemParam.get item-style in
@@ -172,6 +176,42 @@ end = struct
     in
 
     block-frame-breakable ctx (0pt, 0pt, -10pt, 0pt) (deco-none, deco-none, deco-none, deco-none) bbf
+
+  let-block ctx +listing ?:style (Item(_, children)) =
+    let style = style |> Option.from default-style in
+    let-rec aux (Item(it, children)) =
+      let it-children = children
+        |> List.map aux
+        |> List.fold-left (fun a b -> {#a;#b;}) {}
+      in
+      { \item{#it;#it-children;} }
+    in
+    let items = children
+      |> List.map aux
+      |> List.fold-left (fun a b -> {#a;#b;}) {}
+    in
+    read-block ctx '< +itemize(style)(items); >
+
+  let-inline ctx \listing ?:style itemize =
+    let style = style |> Option.from default-style in
+    embed-block-breakable ctx (read-block ctx '< +listing?:(style)(itemize); >)
+
+  let-inline ctx \sublist ?:style (Item(_, children)) =
+    let style = style |> Option.from default-style in
+    let-rec aux (Item(it, children)) =
+      let it-children = children
+        |> List.map aux
+        |> List.fold-left (fun a b -> {#a;#b;}) {}
+      in
+      { \item?:(style){#it;#it-children;} }
+    in
+    let items = children
+      |> List.map aux
+      |> List.fold-left (fun a b -> {#a;#b;}) {}
+    in
+    read-inline ctx items
+
+
 end
 
 %% 標準的なラベルを作成するためのビルダー。
