@@ -1,0 +1,217 @@
+%% enumitem.satyh
+
+@require: base/option-ext
+@require: base/length
+@import: ./param
+
+type itemstyle = int list -> context -> (|
+  label: inline-boxes;
+  left-indent: length;
+  first-line-left-indent: length;
+  right-indent: length;
+  inner-context: context -> context;
+|)
+
+module Enumitem: sig
+
+  val default-style : itemstyle
+  val alph : itemstyle
+  val no-label : itemstyle
+
+  val item : itemstyle -> context -> inline-text -> block-text -> block-boxes
+  direct +item : [itemstyle?; inline-text; itemstyle?; block-text] block-cmd
+  direct +itemize : [itemstyle; block-text] block-cmd
+
+  direct +listing : [itemstyle?; itemize] block-cmd
+  direct \listing : [itemstyle?; itemize] inline-cmd
+
+end = struct
+
+  let-mutable counter-stack <- []
+  let display-counter () =
+    let-rec aux s lst = match lst with
+      | [] -> ` `
+      | x :: rest -> ((arabic x) ^ #` `# ^ (aux s rest))
+    in
+    `counter:` ^ (aux ` ` !counter-stack) |> display-message
+
+  let push-counter () =
+    match !counter-stack with
+    | 0 :: rest -> false
+    | _ -> let () = counter-stack <- 0 :: !counter-stack in true
+
+  let inc-counter () = counter-stack <- (
+    match !counter-stack with
+    | [] -> []
+    | x :: rest -> (x + 1) :: rest
+  )
+  let pop-counter () = counter-stack <- (
+    match !counter-stack with
+    | [] -> []
+    | x :: rest -> rest
+  )
+
+  let default-style idxlst ctx =
+    let it =
+      idxlst |> List.map (fun idx -> idx |> arabic |> embed-string)
+             |> List.fold-left (fun a b -> {#a;.#b;}) {}
+    in
+    let ib-label = read-inline ctx {[#it;]} in
+    let (w, _, _) = get-natural-metrics ib-label in
+    (|
+    label = ib-label;
+    left-indent = 20pt;
+    first-line-left-indent = w +' 10pt;
+    right-indent = 0pt;
+    inner-context = (fun x -> x);
+  |)
+
+  let alph idxlst ctx =
+    (|
+    label = read-inline ctx {A.};
+    left-indent = 20pt;
+    first-line-left-indent = 20pt;
+    right-indent = 0pt;
+    inner-context = (fun x -> x);
+  |)
+
+  let no-label idxlst ctx =
+    (|
+    label = inline-nil;
+    left-indent = 20pt;
+    first-line-left-indent = 20pt;
+    right-indent = 0pt;
+    inner-context = (fun x -> x);
+  |)
+
+  let item-style = EnumitemParam.make default-style
+
+  let deco-none _ _ _ _ = []
+
+  let item style ctx it inner =
+    % カウンタを1あげる
+    let () = inc-counter () in
+    let record = style !counter-stack ctx in
+
+    let is-empty ib =
+      let (w, h, d) = get-natural-metrics ib in
+      Length.(w == 0pt && h == 0pt && d == 0pt)
+    in
+
+    let ib-label = record#label in
+    let (wid-label, _, _) = get-natural-metrics ib-label in
+    let left-indent = record#left-indent in
+    let pads = (left-indent, record#right-indent, 0pt, 0pt) in
+
+    let bbf ctx =
+      let ib-label =
+        (inline-skip (0pt -' left-indent))
+        ++ ib-label
+        ++ (inline-skip (record#first-line-left-indent -' wid-label))
+      in
+
+      let ctx-child = record#inner-context ctx in
+
+      let bb-par =
+        let ib-par = read-inline ctx-child it in
+        if (is-empty ib-par && is-empty ib-label) then
+          block-nil
+        else
+          line-break true true ctx-child (ib-label ++ ib-par ++ inline-fil)
+      in
+
+      let bb-child = read-block ctx-child inner in
+
+      bb-par +++ bb-child
+    in
+
+    block-frame-breakable ctx pads (deco-none, deco-none, deco-none, deco-none) bbf
+
+  let-block ctx +itemize style bt =
+    % 事前準備
+    let push-success = push-counter () in
+    let old-style = EnumitemParam.get item-style in
+    let () = item-style |> EnumitemParam.set style in
+
+    let bb = read-block ctx bt in
+
+    % 後始末
+    let () = item-style |> EnumitemParam.set old-style in
+    let () = if push-success then pop-counter () else () in
+
+    % bb
+    if Length.(get-natural-length bb == 0pt) then
+      block-nil
+    else
+      let ctx = ctx |> set-paragraph-margin 20pt 20pt in
+      block-frame-breakable ctx (0pt, 0pt, 0pt, 0pt) (deco-none, deco-none, deco-none, deco-none) (fun _ -> bb)
+
+  let-block ctx +item ?:style it ?:inner-style bt =
+    let style = style |> Option.from (EnumitemParam.get item-style) in
+    let inner-style = inner-style |> Option.from style in
+    item style ctx it '< +itemize(inner-style)(bt); >
+
+  let itemize-to-item (Item( _, children )) =
+    let-rec aux (Item( it, children )) =
+      let bt = children
+        |> List.map aux
+        |> List.fold-left (fun a b -> '<#a;#b;>) '<>
+      in
+      '< +item(it)(bt); >
+    in
+    children |> List.map aux |> List.fold-left (fun a b -> '<#a;#b;>) '<>
+
+
+  let-block ctx +listing ?:style itemize =
+    let style = style |> Option.from default-style in
+    read-block ctx '<
+      +itemize(style)(itemize-to-item itemize);
+    >
+
+  let-inline ctx \listing ?:style itemize =
+    let style = style |> Option.from default-style in
+    inline-fil ++ embed-block-breakable ctx (read-block ctx '<+listing?:(style)(itemize);>) ++ omit-skip-after
+
+end
+
+%% 標準的なラベルを作成するためのビルダー。
+%% ほとんどの箇条書きのラベルをカバーできる。
+module EnumitemLabel: sig
+
+  % type builder
+
+  % val new : builder
+  % val new-listing : builder
+  % val new-enumerate : builder
+  % val new-description : builder
+
+  % val build : builder -> int list -> context -> inline-text -> block-boxes
+
+end = struct
+
+  % type builder = (|
+  %   % ラベルのインラインテキスト
+  %   label: int list -> context -> inline-boxes;
+  %   % 左側のベースラインと1行目の本文の開始位置の間の長さ。
+  %   % 引数には label の長さが与えられる。
+  %   label-sep: length -> length;
+  %   % ラベルの直後（本文開始の直前）に改行を設けるかどうか。
+  %   nextline: bool;
+  %   % 本文全体のインデント。引数には label の長さが与えられる。
+  %   indent: length -> length;
+  %   % 本文の右端を一番外側のテキストから見てどの程度狭めるか。
+  %   % right-margin: length -> length;
+  %   % 本文のコンテキスト。
+  %   % body-context: context -> context
+  % |)
+  % 
+  % let new = (|
+  %   label = (fun _ _ -> inline-nil);
+  %   label-sep = 10pt;
+  %   nextline = false;
+  %   indent = (fun x -> x);
+  % |)
+  % 
+  % let build bldr  idxlst ctx it = block-nil
+
+end
