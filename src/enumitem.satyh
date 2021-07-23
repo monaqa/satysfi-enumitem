@@ -13,15 +13,17 @@ type itemfmt = (|
   label: int list -> inline-boxes;
   margin-top: length;
   margin-bottom: length;
+  context-inner: context -> context;
 |)
 
 module Enumitem : sig
 
   val spaced-itemfmt: length -> context -> itemfmt
-  val nofmt: context -> itemfmt
+  val nofmt: length -> context -> itemfmt
 
   direct +item : [(context -> itemfmt)?; inline-text; block-text]  block-cmd
-  direct +listing: [context -> itemfmt; itemize] block-cmd
+  direct +listing: [(context -> itemfmt)?; length?; itemize] block-cmd
+  direct \sublist: [context -> itemfmt; itemize] inline-cmd
 
 end = struct
 
@@ -56,6 +58,8 @@ end = struct
   )
   let-inline \set-counter n = let () = set-counter n in {}
 
+  let sublist-stack = EnumitemParam.make '<>
+
   let empty-deco _ _ _ _ = []
   let empty-decoset = (empty-deco, empty-deco, empty-deco, empty-deco)
 
@@ -73,20 +77,22 @@ end = struct
       label = label;
       margin-top = vspace;
       margin-bottom = vspace;
+      context-inner = (fun x -> x);
     |)
 
-  let nofmt ctx =
+  let nofmt margin ctx =
     let label idxlst = inline-nil in
     (|
       indent = (fun _ -> 0pt);
       indent-start = (fun _ -> 0pt);
       label = label;
-      margin-top = 3pt;
-      margin-bottom = 3pt;
+      margin-top = margin;
+      margin-bottom = margin;
+      context-inner = (fun x -> x);
     |)
 
   let-block ctx +item ?:itemfmtf it inner =
-    let itemfmtf = itemfmtf |> Option.from nofmt in
+    let itemfmtf = itemfmtf |> Option.from (nofmt 0pt) in
     let itemfmt = itemfmtf ctx in
 
     let () = inc-counter 1 in
@@ -97,8 +103,12 @@ end = struct
     let indent = itemfmt#indent wid-label in
 
     let bbf ctx =
+
+      let () = sublist-stack |> EnumitemParam.discard in
+      let ib = read-inline ctx it in
+      let bt-inner-additional = sublist-stack |> EnumitemParam.get in
+
       let bb-body =
-        let ib = read-inline ctx it in
         let (w, h, d) = get-natural-metrics ib in
         if Length.(w == 0pt && h == 0pt && d == 0pt) then
           block-nil
@@ -111,8 +121,9 @@ end = struct
           )
       in
       let bb-inner =
+        let ctx = ctx |> itemfmt#context-inner in
         let () = push-counter () in
-        let bb-inner = read-block ctx inner in
+        let bb-inner = read-block ctx '<#bt-inner-additional;#inner;> in
         let () = pop-counter () in
         let h = get-natural-length bb-inner in
         if Length.(h == 0pt) then
@@ -130,228 +141,25 @@ end = struct
       children |> List.map (convert-item-to-bt itemfmtf)
                |> List.fold-left (fun bt1 bt2 -> '<#bt1;#bt2;>) '<>
     in
-    '<
-      +item?:(itemfmtf)(it)(bt-children);
-    >
+    '< +item?:(itemfmtf)(it)(bt-children); >
 
-  let-block ctx +listing itemfmtf (Item(_, children)) =
+  let-block ctx +listing ?:itemfmtf ?:margin (Item(_, children)) =
+    let itemfmtf = itemfmtf |> Option.from (spaced-itemfmt 0pt) in
+    let margin = margin |> Option.from (get-font-size ctx *' 0.25) in
     let bt-children =
       children |> List.map (convert-item-to-bt itemfmtf)
                |> List.fold-left (fun bt1 bt2 -> '<#bt1;#bt2;>) '<>
     in
     read-block ctx '<
-      +item?:(nofmt)({})(bt-children);
+      +item?:(nofmt margin)({})(bt-children);
     >
 
+  let-inline ctx \sublist itemfmtf (Item(_, children)) =
+    let bt-children =
+      children |> List.map (convert-item-to-bt itemfmtf)
+               |> List.fold-left (fun bt1 bt2 -> '<#bt1;#bt2;>) '<>
+    in
+    let () = sublist-stack |> EnumitemParam.set bt-children in
+    inline-nil
+
 end
-
-
-% type itemstyle = int list -> context -> (|
-%   label: inline-boxes;
-%   left-indent: length;
-%   first-line-left-indent: length;
-%   right-indent: length;
-%   inner-context: context -> context;
-%   increment: int;
-% |)
-
-% module Enumitem: sig
-% 
-%   val default-style : itemstyle
-%   val alph : itemstyle
-%   val no-label : itemstyle
-% 
-%   direct \set-counter : [int] inline-cmd
-% 
-%   direct +itemize : [itemstyle; inline-text] block-cmd
-% 
-%   direct +listing : [itemstyle?; itemize] block-cmd
-%   direct \listing : [itemstyle?; itemize] inline-cmd
-%   direct \sublist : [itemstyle?; itemize] inline-cmd
-% 
-%   direct \item : [itemstyle?; inline-text] inline-cmd
-% 
-% end = struct
-% 
-% % counter
-%   let-mutable counter-stack <- []
-%   let display-counter () =
-%     let-rec aux s lst = match lst with
-%       | [] -> ` `
-%       | x :: rest -> ((arabic x) ^ #` `# ^ (aux s rest))
-%     in
-%     `counter:` ^ (aux ` ` !counter-stack) |> display-message
-% 
-%   let push-counter () =
-%     % match !counter-stack with
-%     % | 1 :: rest -> false
-%     % | _ -> let () = counter-stack <- 1 :: !counter-stack in true
-%     counter-stack <- 1 :: !counter-stack
-% 
-%   let inc-counter n = counter-stack <- (
-%     match !counter-stack with
-%     | [] -> []
-%     | x :: rest -> (x + n) :: rest
-%   )
-%   let pop-counter () = counter-stack <- (
-%     match !counter-stack with
-%     | [] -> []
-%     | x :: rest -> rest
-%   )
-%   let set-counter n = counter-stack <- (
-%     match !counter-stack with
-%     | [] -> []
-%     | x :: rest -> n :: rest
-%   )
-% 
-%   let-inline \set-counter n = let () = set-counter n in {}
-% 
-% % style
-%   let default-style idxlst ctx =
-%     let it =
-%       idxlst |> List.map (fun idx -> idx |> arabic |> embed-string)
-%              |> List.fold-left (fun a b -> {#a;.#b;}) {}
-%     in
-%     let ib-label = read-inline ctx {[#it;]} in
-%     let (w, _, _) = get-natural-metrics ib-label in
-% 
-%     (|
-%     label = ib-label;
-%     left-indent = 20pt;
-%     first-line-left-indent = w +' 10pt;
-%     right-indent = 0pt;
-%     inner-context = (fun x -> x);
-%     increment = 1;
-%   |)
-% 
-%   let alph idxlst ctx =
-%     (|
-%     label = read-inline ctx {A.};
-%     left-indent = 20pt;
-%     first-line-left-indent = 20pt;
-%     right-indent = 0pt;
-%     inner-context = (fun x -> x);
-%     increment = 0;
-%   |)
-% 
-%   let no-label idxlst ctx =
-%     (|
-%     label = inline-nil;
-%     left-indent = 20pt;
-%     first-line-left-indent = 20pt;
-%     right-indent = 0pt;
-%     inner-context = (fun x -> x);
-%     increment = 0;
-%   |)
-% 
-% % parameters
-%   let item-style = EnumitemParam.make default-style
-% 
-%   let deco-none _ _ _ _ = []
-% 
-% % command
-% 
-%   let-inline ctx \item ?:style it =
-%     let style = style |> Option.from (EnumitemParam.get item-style) in
-% 
-%     let bb =
-%       let () = display-counter () in
-%       let record = style !counter-stack ctx in
-% 
-%       let is-empty ib =
-%         let (w, h, d) = get-natural-metrics ib in
-%         Length.(w == 0pt && h == 0pt && d == 0pt)
-%       in
-% 
-%       let ib-label = record#label in
-%       let (wid-label, _, _) = get-natural-metrics ib-label in
-%       let left-indent = record#left-indent in
-%       let pads = (left-indent, record#right-indent, 0pt, 0pt) in
-% 
-%       let bbf ctx =
-% 
-%         let ib-label =
-%           (inline-skip (0pt -' left-indent))
-%             ++ ib-label
-%               ++ (inline-skip (record#first-line-left-indent -' wid-label))
-%         in
-% 
-%         let ctx-child = record#inner-context ctx in
-% 
-%         let bb-par =
-%           % 事前準備
-%           let () = push-counter () in
-%           let ib-par = read-inline ctx-child it in
-%           % 後始末
-%           let () = pop-counter () in
-%           % カウンタを1あげる
-%           let () = inc-counter record#increment in
-% 
-%           if (is-empty ib-par && is-empty ib-label) then
-%             block-nil
-%           else
-%             line-break true true ctx-child (ib-label ++ ib-par ++ inline-fil)
-%         in
-% 
-%         bb-par
-%       in
-% 
-%       block-frame-breakable ctx pads (deco-none, deco-none, deco-none, deco-none) bbf
-%     in
-% 
-%     inline-fil ++ embed-block-breakable ctx bb ++ omit-skip-after
-% 
-%   let-block ctx +itemize style inner =
-%     % 事前準備
-%     let () = push-counter () in
-%     let old-style = EnumitemParam.get item-style in
-%     let () = item-style |> EnumitemParam.set style in
-% 
-%     let ib = read-inline ctx inner in
-% 
-%     % 後始末
-%     let () = item-style |> EnumitemParam.set old-style in
-%     let () = pop-counter () in
-% 
-%     let bbf ctx =
-%       line-break true true ctx (ib ++ inline-fil)
-%     in
-% 
-%     block-frame-breakable ctx (0pt, 0pt, -10pt, 0pt) (deco-none, deco-none, deco-none, deco-none) bbf
-% 
-%   let-block ctx +listing ?:style (Item(_, children)) =
-%     let style = style |> Option.from default-style in
-%     let-rec aux (Item(it, children)) =
-%       let it-children = children
-%         |> List.map aux
-%         |> List.fold-left (fun a b -> {#a;#b;}) {}
-%       in
-%       { \item{#it;#it-children;} }
-%     in
-%     let items = children
-%       |> List.map aux
-%       |> List.fold-left (fun a b -> {#a;#b;}) {}
-%     in
-%     read-block ctx '< +itemize(style)(items); >
-% 
-%   let-inline ctx \listing ?:style itemize =
-%     let style = style |> Option.from default-style in
-%     embed-block-breakable ctx (read-block ctx '< +listing?:(style)(itemize); >)
-% 
-%   let-inline ctx \sublist ?:style (Item(_, children)) =
-%     let style = style |> Option.from default-style in
-%     let-rec aux (Item(it, children)) =
-%       let it-children = children
-%         |> List.map aux
-%         |> List.fold-left (fun a b -> {#a;#b;}) {}
-%       in
-%       { \item?:(style){#it;#it-children;} }
-%     in
-%     let items = children
-%       |> List.map aux
-%       |> List.fold-left (fun a b -> {#a;#b;}) {}
-%     in
-%     read-inline ctx items
-% 
-% 
-% end

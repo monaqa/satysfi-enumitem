@@ -65,7 +65,7 @@ document (|
 
   +p{\jugem;}
 
-  +item?:(Enumitem.nofmt){}<
+  +item?:(Enumitem.nofmt 10pt){}<
     +item?:(Enumitem.spaced-itemfmt 0pt ){\jugem;}<>
     +item?:(Enumitem.spaced-itemfmt 0pt ){\qf;}<
       +p{あああ}
@@ -80,13 +80,37 @@ document (|
 
   +p{\jugem;}
 
-  +listing(Enumitem.spaced-itemfmt 0pt){
+  +listing?:(Enumitem.spaced-itemfmt 0pt){
     * \jugem;
     * \qf;
       ** \jugem;
         *** \qf;
         *** \jugem;
       ** \qf;
+  }
+
+  +p{\jugem;}
+
+  +listing?:(Enumitem.spaced-itemfmt 0pt){
+    * \jugem;
+    * \qf;
+      \sublist(Enumitem.spaced-itemfmt 0pt){
+        * \jugem;
+          \sublist(Enumitem.spaced-itemfmt 0pt){
+            * \qf;
+            * \jugem;
+          }
+            * \jugem;
+      }
+            * あああ
+  }
+
+  +listing?:(Enumitem.spaced-itemfmt 0pt){
+    * \jugem;
+    * \qf;
+      ** \jugem;
+        *** \qf;
+        *** \jugem;
   }
 
   +p{\jugem;}
