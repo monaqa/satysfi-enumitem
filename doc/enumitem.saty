@@ -129,5 +129,14 @@ document (|
     +item?:(raw-arabic){\jugem;}<>
   >
 
+  +itemize(nofmt)<
+
+    +ditem{ほげふが}{\jugem;}
+    +ditemln{ぴよぴよ}<
+      +p{\jugem;}
+    >
+
+  >
+
 
 >

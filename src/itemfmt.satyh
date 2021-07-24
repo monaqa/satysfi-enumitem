@@ -28,7 +28,7 @@ type itemfmt = (|
   label-align: float;
 
   % ラベルに対応するテキストが空のときにラベル行を描画するかどうか。
-  draw-label-if-text-empty: bool;
+  display-label-with-empty-body: bool;
 
   % 箇条書きの段落の上に追加であける余白（paragraph-margin による余白はそのまま入る）。
   margin-top: context -> length;
@@ -49,7 +49,7 @@ module EnumitemFormat : sig
   val set-indent-text : (context -> length -> length) -> itemfmt -> itemfmt
   val set-indent-start : (context -> length -> length) -> itemfmt -> itemfmt
   val set-label-align : float -> itemfmt -> itemfmt
-  val set-draw-label-flag : bool -> itemfmt -> itemfmt
+  val set-display-label-flag : bool -> itemfmt -> itemfmt
 
   % ラベルを左寄せで表示する。
   % args:
@@ -81,7 +81,7 @@ end = struct
     indent-start = (fun _ _ -> 0pt);
     label = (fun _ _ -> inline-nil);
     label-align = 0.0;
-    draw-label-if-text-empty = false;
+    display-label-with-empty-body = false;
     margin-top = (fun _ -> 0pt);
     margin-bottom = (fun _ -> 0pt);
     context-inner = (fun x -> x);
@@ -96,8 +96,8 @@ end = struct
 
   let set-label-align-left gapf indentf fmt = fmt
     |> set-indent-base (fun _ -> 0pt)
-    |> set-indent-text (fun ctx wid ->  Length.max (indentf ctx) (wid +' gapf ctx))
-    |> set-indent-start (fun ctx wid -> indentf ctx)
+    |> set-indent-start (fun ctx wid ->  Length.max (indentf ctx) (wid +' gapf ctx))
+    |> set-indent-text (fun ctx wid -> indentf ctx)
     |> set-label-align 0.0
 
   let set-label-align-left-floattext indentf fmt = fmt
@@ -130,7 +130,7 @@ end = struct
     let labelf-by-nested-index _ _ = label in
     (| fmt with label = labelf-by-nested-index; |)
 
-  let set-draw-label-flag flg fmt = (| fmt with draw-label-if-text-empty = flg; |)
+  let set-display-label-flag flg fmt = (| fmt with display-label-with-empty-body = flg; |)
 
   let set-margin mgnf fmt =
     (| fmt with margin-top = mgnf; margin-bottom = mgnf; |)
@@ -276,49 +276,3 @@ end = struct
     inline-graphics wid ht dp (fun (x, y) -> [draw-text (x +' wid -' wid-ib, y) ib])
 end
 
-
-module EnumitemFormatAlias : sig
-
-  val nofmt : itemfmt
-
-  val raw-arabic: itemfmt
-  val dot-arabic-rec: itemfmt
-
-  val description: inline-text -> itemfmt
-  val description-newline: inline-text -> itemfmt
-
-end = struct
-
-  open EnumitemFormat
-
-  let nofmt = init
-
-% formats
-  let raw-arabic = init
-    |> set-label-by-index EnumitemFormatUtil.(raw to-arabic)
-    |> set-label-align-right (fun ctx -> get-font-size ctx *' 2.)
-
-  let dot-arabic-rec =
-    let labelf ctx idxlst =
-      idxlst |> List.map arabic |> List.map embed-string
-             |> List.fold-left (fun it1 it2 -> {#it2;.#it1;}) {\ }
-             |> read-inline ctx
-    in
-    init
-      |> set-label-by-nested-index labelf
-      |> set-label-align-right (fun ctx -> get-font-size ctx *' 2.)
-
-% description
-  let description it =
-    let labelf ctx = read-inline ctx it in
-    init
-      |> set-label-by-context labelf
-      |> set-label-align-left (fun ctx -> get-font-size ctx *' 1.) (fun ctx -> get-font-size ctx *' 2.)
-
-  let description-newline it =
-    let labelf ctx = read-inline ctx it in
-    init
-      |> set-label-by-context labelf
-      |> set-label-align-left (fun ctx -> get-font-size ctx *' 1.) (fun ctx -> get-font-size ctx *' 2.)
-
-end
