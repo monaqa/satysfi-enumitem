@@ -113,6 +113,8 @@ document (|
       ** \jugem;
         *** \qf;
         *** \jugem;
+
+    * ** *** aaa
   }
 
   +p{\jugem;}
@@ -137,6 +139,14 @@ document (|
     >
 
   >
+
+  +p{\jugem;}
+
+  +listing{
+    * \jugem;
+    * 
+      ** \jugem;
+  }
 
 
 >

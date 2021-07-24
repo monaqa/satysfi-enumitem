@@ -7,12 +7,7 @@ type itemfmt = (|
   % 基準となるインデントの量。
   % 本文の左端から indent-base だけ右にずらした線を基準線とよび、
   % ラベルの揃え方や本文のインデント量はこの基準線をもとに設定される。
-  indent-base: context -> length;
-
-  % 本文のインデントの量。実際には indent-base に加算される。
-  % args:
-  %   width (length): ラベルのインラインボックス列の横幅。
-  indent-text: context -> length -> length;
+  indent-base: context -> length -> length;
 
   % ラベルの直後に来るテキストのインデントの量。
   % args:
@@ -21,11 +16,6 @@ type itemfmt = (|
 
   % 現在のアイテムのインデックスを与えて、ラベルのインラインボックス列を返す。
   label: context -> int list -> inline-boxes;
-
-  % ラベルのどこを基準線に揃えるか。
-  % 0.0 ならラベルの左端を基準線に揃える。
-  % 1.0 ならラベルの右端を基準線に揃える。
-  label-align: float;
 
   % ラベルに対応するテキストが空のときにラベル行を描画するかどうか。
   display-label-with-empty-body: bool;
@@ -45,26 +35,14 @@ module EnumitemFormat : sig
 % builder
   val init : itemfmt
 
-  val set-indent-base : (context -> length) -> itemfmt -> itemfmt
-  val set-indent-text : (context -> length -> length) -> itemfmt -> itemfmt
+  val set-indent-base : (context -> length -> length) -> itemfmt -> itemfmt
   val set-indent-start : (context -> length -> length) -> itemfmt -> itemfmt
-  val set-label-align : float -> itemfmt -> itemfmt
   val set-display-label-flag : bool -> itemfmt -> itemfmt
-
-  % ラベルを左寄せで表示する。
-  % args:
-  %   gapf: テキスト処理文脈を与え「ラベルと本文の間にあける最小の余白」を返す関数
-  %   indentf: テキスト処理文脈を与え「本文のインデント量」を返す関数
-  %   fmt: 変換対象の format.
-  val set-label-align-left: (context -> length) -> (context -> length) -> itemfmt -> itemfmt
-  % ラベルを左寄せで表示し、テキスト（本文）の開始位置をラベルの長さに応じて動かす。
-  val set-label-align-left-floattext: (context -> length) -> itemfmt -> itemfmt
-  % ラベルを右寄せで表示する。
-  val set-label-align-right: (context -> length) -> itemfmt -> itemfmt
 
   val set-label : inline-boxes -> itemfmt -> itemfmt
   val set-label-by-context : (context -> inline-boxes) -> itemfmt -> itemfmt
   val set-label-by-index : (context -> int -> inline-boxes) -> itemfmt -> itemfmt
+  val set-label-by-depth : (context -> int -> inline-boxes) -> itemfmt -> itemfmt
   val set-label-by-nested-index : (context -> int list -> inline-boxes) -> itemfmt -> itemfmt
 
   val set-margin : (context -> length) -> itemfmt -> itemfmt
@@ -76,11 +54,9 @@ module EnumitemFormat : sig
 end = struct
 
   let init = (|
-    indent-base = (fun _ -> 0pt);
-    indent-text = (fun _ _ -> 0pt);
+    indent-base = (fun _ _ -> 0pt);
     indent-start = (fun _ _ -> 0pt);
     label = (fun _ _ -> inline-nil);
-    label-align = 0.0;
     display-label-with-empty-body = false;
     margin-top = (fun _ -> 0pt);
     margin-bottom = (fun _ -> 0pt);
@@ -90,27 +66,7 @@ end = struct
 % setter
 
   let set-indent-base indentf fmt = (| fmt with indent-base = indentf; |)
-  let set-indent-text indentf fmt = (| fmt with indent-text = indentf; |)
   let set-indent-start indentf fmt = (| fmt with indent-start = indentf; |)
-  let set-label-align algn fmt = (| fmt with label-align = algn; |)
-
-  let set-label-align-left gapf indentf fmt = fmt
-    |> set-indent-base (fun _ -> 0pt)
-    |> set-indent-start (fun ctx wid ->  Length.max (indentf ctx) (wid +' gapf ctx))
-    |> set-indent-text (fun ctx wid -> indentf ctx)
-    |> set-label-align 0.0
-
-  let set-label-align-left-floattext indentf fmt = fmt
-    |> set-indent-base (fun _ -> 0pt)
-    |> set-indent-text (fun ctx wid -> wid +' indentf ctx)
-    |> set-indent-start (fun ctx wid -> wid +' indentf ctx)
-    |> set-label-align 0.0
-
-  let set-label-align-right indentf fmt = fmt
-    |> set-indent-base (fun ctx -> indentf ctx)
-    |> set-indent-text (fun _ _ -> 0pt)
-    |> set-indent-start (fun _ _ -> 0pt)
-    |> set-label-align 1.0
 
   let set-label-by-nested-index labelf fmt = (| fmt with label = labelf; |)
 
@@ -119,6 +75,12 @@ end = struct
       match idxlst with
       | [] -> labelf ctx 0
       | x :: _ -> labelf ctx x
+    in
+    (| fmt with label = labelf-by-nested-index; |)
+
+  let set-label-by-depth labelf fmt =
+    let labelf-by-nested-index ctx idxlst =
+      labelf ctx (List.length idxlst)
     in
     (| fmt with label = labelf-by-nested-index; |)
 
@@ -140,139 +102,3 @@ end = struct
   let set-context-inner f fmt = (| fmt with context-inner =f; |)
 
 end
-
-module EnumitemFormatUtil : sig
-
-% text mapping function
-  val to-arabic: int -> inline-text
-  val to-roman : int -> inline-text
-  val to-Roman : int -> inline-text
-  val to-alph  : int -> inline-text
-  val to-Alph  : int -> inline-text
-
-% index decolation function (ordered)
-  val raw     : (int -> inline-text) -> context -> int -> inline-boxes
-  val dot     : (int -> inline-text) -> context -> int -> inline-boxes
-  val paren   : (int -> inline-text) -> context -> int -> inline-boxes
-  val bracket : (int -> inline-text) -> context -> int -> inline-boxes
-
-% index decolation function (unordered)
-  val shape-bullet       : context -> inline-boxes
-  val shape-white-bullet : context -> inline-boxes
-
-% adjuster
-  val align-right: length -> inline-boxes -> inline-boxes
-
-end = struct
-
-% text mapping
-
-  let num-to-roman-char capital num =
-    let unic-point = match num with
-      |  1 -> 0x0049  % `I`
-      |  5 -> 0x0056  % `V`
-      | 10 -> 0x0058  % `X`
-      |  _ -> 0x003F  % `?`
-    in
-    if capital then unic-point else unic-point + 0x20
-
-  let roman-seq num = match num with
-    |  1 -> [ 1;                 ] % i
-    |  2 -> [ 1;  1;             ] % ii
-    |  3 -> [ 1;  1;  1;         ] % iii
-    |  4 -> [ 1;  5;             ] % iv
-    |  5 -> [ 5;                 ] % v
-    |  6 -> [ 5;  1;             ] % vi
-    |  7 -> [ 5;  1;  1;         ] % vii
-    |  8 -> [ 5;  1;  1;  1;     ] % viii
-    |  9 -> [ 1; 10;             ] % ix
-    | 10 -> [10;                 ] % x
-    | 11 -> [10;  1;             ] % xi
-    | 12 -> [10;  1;  1;         ] % xii
-    | 13 -> [10;  1;  1;  1;     ] % xiii
-    | 14 -> [10;  1;  5;         ] % xiv
-    | 15 -> [10;  5;             ] % xv
-    | 16 -> [10;  5;  1;         ] % xvi
-    | 17 -> [10;  5;  1;  1;     ] % xvii
-    | 18 -> [10;  5;  1;  1;  1; ] % xviii
-    | 19 -> [10;  1; 10;         ] % xix
-    | 20 -> [10; 10;             ] % xx
-    | 21 -> [10; 10;  1;         ] % xxi
-    | 22 -> [10; 10;  1;  1;     ] % xxii
-    | 23 -> [10; 10;  1;  1;  1; ] % xxiii
-    | 24 -> [10; 10;  1;  5;     ] % xxiv
-    | 25 -> [10; 10;  5;         ] % xxv
-    |  _ -> [ 0;  0;             ] % ??
-
-  let to-arabic num = embed-string (arabic num)
-
-  let to-roman num =
-    embed-string
-      (string-unexplode
-        (List.map (fun i -> num-to-roman-char false i) (roman-seq num)))
-  let to-Roman num =
-    embed-string
-      (string-unexplode
-        (List.map (fun i -> num-to-roman-char true i) (roman-seq num)))
-
-  let to-alph num = embed-string (string-unexplode [num + 0x0060;])
-  let to-Alph num = embed-string (string-unexplode [num + 0x0040;])
-
-% index decolation function (ordered)
-
-  let raw num-format ctx idx =
-    let it-num = num-format idx in
-    let ib-label = read-inline ctx {#it-num;\ } in
-    let (wid-label, _, _) = get-natural-metrics ib-label in
-    ib-label
-
-  let dot num-format ctx idx =
-    let it-num = num-format idx in
-    let ib-label = read-inline ctx {#it-num;.\ } in
-    let (wid-label, _, _) = get-natural-metrics ib-label in
-    ib-label
-
-  let paren num-format ctx idx =
-    let it-num = num-format idx in
-    let ib-label = read-inline ctx {(#it-num;)\ } in
-    let (wid-label, _, _) = get-natural-metrics ib-label in
-    ib-label
-
-  let bracket num-format ctx idx =
-    let it-num = num-format idx in
-    let ib-label = read-inline ctx {[#it-num;]\ } in
-    let (wid-label, _, _) = get-natural-metrics ib-label in
-    ib-label
-
-% index decolation function (unordered)
-
-  let shape-bullet ctx =
-    let font-size = get-font-size ctx in
-    let interval = font-size *' 0.3 in
-    let circ ctx (x, y) =
-      let cx = x +' font-size -' (font-size *' 0.3) -' interval in
-      let cy = y +' font-size *' 0.3 in
-      let r = font-size *' 0.15 in
-      Gr.circle (cx, cy) r
-    in
-    inline-graphics font-size (font-size *' 0.5) 0pt
-      (fun (x, y) -> [fill Color.black (circ ctx (x, y))])
-
-  let shape-white-bullet ctx =
-    let font-size = get-font-size ctx in
-    let interval = font-size *' 0.3 in
-    let circ ctx (x, y) =
-      let cx = x +' font-size -' (font-size *' 0.3) -' interval in
-      let cy = y +' font-size *' 0.3 in
-      let r = font-size *' 0.12 in
-      Gr.circle (cx, cy) r
-    in
-    inline-graphics font-size (font-size *' 0.5) 0pt
-      (fun (x, y) -> [stroke 0.8pt Color.black (circ ctx (x, y))])
-
-% adjuster
-  let align-right wid ib =
-    let (wid-ib, ht, dp) = get-natural-metrics ib in
-    inline-graphics wid ht dp (fun (x, y) -> [draw-text (x +' wid -' wid-ib, y) ib])
-end
-
