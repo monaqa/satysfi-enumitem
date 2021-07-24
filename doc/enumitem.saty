@@ -67,22 +67,22 @@ document (|
 
   +p{\jugem;}
 
-  +item?:(nofmt){}<
-    +item?:(raw-dot-rec){\jugem;}<>
-    +item?:(raw-dot-rec){\qf;}<
+  +itemize(dot-arabic-rec)<
+    +item{\jugem;}<>
+    +item{\qf;}<
       +p{あああ}
-      +item?:(raw-dot-rec){\jugem;}<
-        +item?:(raw-dot-rec){\qf;}<>
-        +item?:(raw-dot-rec){\jugem;}<>
+      +item{\jugem;}<
+        +item{\qf;}<>
+        +item{\jugem;}<>
       >
-      +item?:(raw-dot-rec){\qf;}<>
+      +item{\qf;}<>
       +p{\jugem;}
     >
   >
 
   +p{\jugem;}
 
-  +listing?:(raw-dot-rec){
+  +listing?:(dot-arabic-rec){
     * \jugem;
     * \qf;
       ** \jugem;
@@ -93,12 +93,12 @@ document (|
 
   +p{\jugem;}
 
-  +listing?:(raw-dot-rec){
+  +listing?:(dot-arabic-rec){
     * \jugem;
     * \qf;
-      \sublist(raw-dot-rec){
+      \sublist(dot-arabic-rec){
         * \jugem;
-          \sublist(raw-dot-rec){
+          \sublist(dot-arabic-rec){
             * \qf;
             * \jugem;
           }
@@ -107,7 +107,7 @@ document (|
     * あああ
   }
 
-  +listing?:(raw-dot-rec){
+  +listing?:(dot-arabic-rec){
     * \jugem;
     * \qf;
       ** \jugem;
@@ -117,13 +117,17 @@ document (|
 
   +p{\jugem;}
 
-  +itemize(raw-dot-rec)<
+  +itemize(dot-arabic-rec)<
     +item{\jugem;}<
       +p{\jugem;}
       +p{\jugem;}
     >
   >
 
+  +itemize(dot-arabic-rec)<
+    +item{\jugem;}<>
+    +item?:(raw-arabic){\jugem;}<>
+  >
 
 
 >

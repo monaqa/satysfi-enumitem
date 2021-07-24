@@ -282,7 +282,7 @@ module EnumitemFormatAlias : sig
   val nofmt : itemfmt
 
   val raw-arabic: itemfmt
-  val raw-dot-rec: itemfmt
+  val dot-arabic-rec: itemfmt
 
   val description: inline-text -> itemfmt
   val description-newline: inline-text -> itemfmt
@@ -298,7 +298,7 @@ end = struct
     |> set-label-by-index EnumitemFormatUtil.(raw to-arabic)
     |> set-label-align-right (fun ctx -> get-font-size ctx *' 2.)
 
-  let raw-dot-rec =
+  let dot-arabic-rec =
     let labelf ctx idxlst =
       idxlst |> List.map arabic |> List.map embed-string
              |> List.fold-left (fun it1 it2 -> {#it2;.#it1;}) {\ }

@@ -22,7 +22,7 @@ module Enumitem : sig
   % val spaced-itemfmt: length -> context -> itemfmt
   % val nofmt: length -> context -> itemfmt
 
-  direct +item : [itemfmt?; inline-text; block-text]  block-cmd
+  direct +item : [itemfmt?; inline-text; itemfmt?; block-text]  block-cmd
   direct +itemize : [itemfmt; block-text]  block-cmd
   direct +listing: [itemfmt?; length?; itemize] block-cmd
   direct \sublist: [itemfmt; itemize] inline-cmd
@@ -67,6 +67,8 @@ end = struct
 
   let no-pad = (0pt, 0pt, 0pt, 0pt)
 
+  let current-itemfmt = EnumitemParam.make EnumitemFormatAlias.nofmt
+
   % let spaced-itemfmt vspace ctx =
   %   let label idxlst =
   %     idxlst |> List.map arabic |> List.map embed-string
@@ -93,8 +95,8 @@ end = struct
   %     context-inner = (fun x -> x);
   %   |)
 
-  let-block ctx +item ?:itemfmt it inner =
-    let itemfmt = itemfmt |> Option.from EnumitemFormatAlias.nofmt in
+  let-block ctx +item ?:itemfmt it ?:itemfmt-children inner =
+    let itemfmt = itemfmt |> Option.from (EnumitemParam.get current-itemfmt) in
 
     let () = inc-counter 1 in
     let () = display-counter () in
@@ -127,9 +129,22 @@ end = struct
       in
       let bb-inner =
         let ctx = ctx |> itemfmt#context-inner in
+
+        % 事前に起こしておく副作用
         let () = push-counter () in
+        let current-itemfmt-old = EnumitemParam.get current-itemfmt in
+        let () = match itemfmt-children with
+          | Some(fmt) -> current-itemfmt |> EnumitemParam.set fmt
+          | None -> ()
+        in
+
+        % read-block
         let bb-inner = read-block ctx '<#bt-inner-additional;#inner;> in
+
+        % 起こした副作用の後片付け
         let () = pop-counter () in
+        let () = current-itemfmt |> EnumitemParam.set current-itemfmt-old in
+
         let h = get-natural-length bb-inner in
         if Length.(h == 0pt) then
           block-nil
@@ -142,7 +157,7 @@ end = struct
     block-frame-breakable ctx (indent-text, 0pt, 0pt, 0pt) empty-decoset bbf
 
   let-block +itemize itemfmt bt =
-    '< +item?:(EnumitemFormatAlias.nofmt)({})(bt); >
+    '< +item?:(EnumitemFormatAlias.nofmt)({})?:(itemfmt)(bt); >
 
   let-rec convert-item-to-bt itemfmt (Item(it, children)) =
     let bt-children =
