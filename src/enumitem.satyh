@@ -3,27 +3,29 @@
 @require: base/option-ext
 @require: base/length
 @import: ./param
+@import: ./itemfmt
 
-type itemfmt = (|
-  % ラベルの長さを与えて、本文のインデント量を示す。
-  indent: length -> length;
-  % ラベルの長さを与えて、本文の最初の文字のインデント量を示す。
-  indent-start: length -> length;
-  % 現在のアイテムのインデックスを与えて、ラベルのインラインボックス列を返す。
-  label: int list -> inline-boxes;
-  margin-top: length;
-  margin-bottom: length;
-  context-inner: context -> context;
-|)
+% type itemfmt = (|
+%   % ラベルの長さを与えて、本文のインデント量を示す。
+%   indent: length -> length;
+%   % ラベルの長さを与えて、本文の最初の文字のインデント量を示す。
+%   indent-start: length -> length;
+%   % 現在のアイテムのインデックスを与えて、ラベルのインラインボックス列を返す。
+%   label: int list -> inline-boxes;
+%   margin-top: length;
+%   margin-bottom: length;
+%   context-inner: context -> context;
+% |)
 
 module Enumitem : sig
 
-  val spaced-itemfmt: length -> context -> itemfmt
-  val nofmt: length -> context -> itemfmt
+  % val spaced-itemfmt: length -> context -> itemfmt
+  % val nofmt: length -> context -> itemfmt
 
-  direct +item : [(context -> itemfmt)?; inline-text; block-text]  block-cmd
-  direct +listing: [(context -> itemfmt)?; length?; itemize] block-cmd
-  direct \sublist: [context -> itemfmt; itemize] inline-cmd
+  direct +item : [itemfmt?; inline-text; block-text]  block-cmd
+  direct +itemize : [itemfmt; block-text]  block-cmd
+  direct +listing: [itemfmt?; length?; itemize] block-cmd
+  direct \sublist: [itemfmt; itemize] inline-cmd
 
 end = struct
 
@@ -65,42 +67,42 @@ end = struct
 
   let no-pad = (0pt, 0pt, 0pt, 0pt)
 
-  let spaced-itemfmt vspace ctx =
-    let label idxlst =
-      idxlst |> List.map arabic |> List.map embed-string
-             |> List.fold-left (fun it1 it2 -> {#it2;.#it1;}) {\ }
-             |> read-inline ctx
-    in
-    (|
-      indent = (fun x -> 20pt);
-      indent-start = (fun x -> x +' 0pt);
-      label = label;
-      margin-top = vspace;
-      margin-bottom = vspace;
-      context-inner = (fun x -> x);
-    |)
+  % let spaced-itemfmt vspace ctx =
+  %   let label idxlst =
+  %     idxlst |> List.map arabic |> List.map embed-string
+  %            |> List.fold-left (fun it1 it2 -> {#it2;.#it1;}) {\ }
+  %            |> read-inline ctx
+  %   in
+  %   (|
+  %     indent = (fun x -> 20pt);
+  %     indent-start = (fun x -> x +' 0pt);
+  %     label = label;
+  %     margin-top = vspace;
+  %     margin-bottom = vspace;
+  %     context-inner = (fun x -> x |> set-font-size (get-font-size x *' 1.2));
+  %   |)
+  % 
+  % let nofmt margin ctx =
+  %   let label idxlst = inline-nil in
+  %   (|
+  %     indent = (fun _ -> 0pt);
+  %     indent-start = (fun _ -> 0pt);
+  %     label = label;
+  %     margin-top = margin;
+  %     margin-bottom = margin;
+  %     context-inner = (fun x -> x);
+  %   |)
 
-  let nofmt margin ctx =
-    let label idxlst = inline-nil in
-    (|
-      indent = (fun _ -> 0pt);
-      indent-start = (fun _ -> 0pt);
-      label = label;
-      margin-top = margin;
-      margin-bottom = margin;
-      context-inner = (fun x -> x);
-    |)
-
-  let-block ctx +item ?:itemfmtf it inner =
-    let itemfmtf = itemfmtf |> Option.from (nofmt 0pt) in
-    let itemfmt = itemfmtf ctx in
+  let-block ctx +item ?:itemfmt it inner =
+    let itemfmt = itemfmt |> Option.from EnumitemFormatAlias.nofmt in
 
     let () = inc-counter 1 in
     let () = display-counter () in
 
-    let ib-label = itemfmt#label !counter-stack in
-    let (wid-label, _, _) = get-natural-metrics ib-label in
-    let indent = itemfmt#indent wid-label in
+    let ib-label = itemfmt#label ctx !counter-stack in
+    let (wid-label, ht-label, dp-label) = get-natural-metrics ib-label in
+    let indent-base = itemfmt#indent-base ctx in
+    let indent-text = indent-base +'itemfmt#indent-text ctx wid-label in
 
     let bbf ctx =
 
@@ -113,11 +115,14 @@ end = struct
         if Length.(w == 0pt && h == 0pt && d == 0pt) then
           block-nil
         else
-          let indent-start = itemfmt#indent-start wid-label in
+          let indent-start = itemfmt#indent-start ctx wid-label in
+          let ib-gr-label =
+            inline-graphics 0pt ht-label dp-label (fun (x, y) -> [
+              draw-text (x -' wid-label *' itemfmt#label-align, y) ib-label
+            ])
+          in
           line-break true true ctx (
-            inline-skip (0pt -' indent)
-              ++ ib-label ++ inline-skip (indent-start -' wid-label)
-                ++ ib ++ inline-fil
+              ib-gr-label ++ inline-skip indent-start ++ ib ++ inline-fil
           )
       in
       let bb-inner =
@@ -129,34 +134,37 @@ end = struct
         if Length.(h == 0pt) then
           block-nil
         else
-          block-frame-breakable ctx (0pt, 0pt, itemfmt#margin-top, itemfmt#margin-bottom)
+          block-frame-breakable ctx (0pt, 0pt, itemfmt#margin-top ctx, itemfmt#margin-bottom ctx)
             empty-decoset (fun ctx -> bb-inner)
       in
       bb-body +++ bb-inner
     in
-    block-frame-breakable ctx (indent, 0pt, 0pt, 0pt) empty-decoset bbf
+    block-frame-breakable ctx (indent-text, 0pt, 0pt, 0pt) empty-decoset bbf
 
-  let-rec convert-item-to-bt itemfmtf (Item(it, children)) =
+  let-block +itemize itemfmt bt =
+    '< +item?:(EnumitemFormatAlias.nofmt)({})(bt); >
+
+  let-rec convert-item-to-bt itemfmt (Item(it, children)) =
     let bt-children =
-      children |> List.map (convert-item-to-bt itemfmtf)
+      children |> List.map (convert-item-to-bt itemfmt)
                |> List.fold-left (fun bt1 bt2 -> '<#bt1;#bt2;>) '<>
     in
-    '< +item?:(itemfmtf)(it)(bt-children); >
+    '< +item?:(itemfmt)(it)(bt-children); >
 
-  let-block ctx +listing ?:itemfmtf ?:margin (Item(_, children)) =
-    let itemfmtf = itemfmtf |> Option.from (spaced-itemfmt 0pt) in
+  let-block ctx +listing ?:itemfmt ?:margin (Item(_, children)) =
+    let itemfmt = itemfmt |> Option.from EnumitemFormatAlias.nofmt in
     let margin = margin |> Option.from (get-font-size ctx *' 0.25) in
     let bt-children =
-      children |> List.map (convert-item-to-bt itemfmtf)
+      children |> List.map (convert-item-to-bt itemfmt)
                |> List.fold-left (fun bt1 bt2 -> '<#bt1;#bt2;>) '<>
     in
     read-block ctx '<
-      +item?:(nofmt margin)({})(bt-children);
+      +item?:(EnumitemFormatAlias.nofmt)({})(bt-children);
     >
 
-  let-inline ctx \sublist itemfmtf (Item(_, children)) =
+  let-inline ctx \sublist itemfmt (Item(_, children)) =
     let bt-children =
-      children |> List.map (convert-item-to-bt itemfmtf)
+      children |> List.map (convert-item-to-bt itemfmt)
                |> List.fold-left (fun bt1 bt2 -> '<#bt1;#bt2;>) '<>
     in
     let () = sublist-stack |> EnumitemParam.set bt-children in

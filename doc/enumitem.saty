@@ -5,6 +5,8 @@
 @require: vdecoset
 @import: ../src/enumitem
 
+open EnumitemFormatAlias
+
 % custom commands
 let-block ctx +ctx ctxf bt = read-block (ctxf ctx) bt
 
@@ -65,22 +67,22 @@ document (|
 
   +p{\jugem;}
 
-  +item?:(Enumitem.nofmt 10pt){}<
-    +item?:(Enumitem.spaced-itemfmt 0pt ){\jugem;}<>
-    +item?:(Enumitem.spaced-itemfmt 0pt ){\qf;}<
+  +item?:(nofmt){}<
+    +item?:(raw-dot-rec){\jugem;}<>
+    +item?:(raw-dot-rec){\qf;}<
       +p{あああ}
-      +item?:(Enumitem.spaced-itemfmt 0pt ){\jugem;}<
-        +item?:(Enumitem.spaced-itemfmt 0pt ){\qf;}<>
-        +item?:(Enumitem.spaced-itemfmt 0pt ){\jugem;}<>
+      +item?:(raw-dot-rec){\jugem;}<
+        +item?:(raw-dot-rec){\qf;}<>
+        +item?:(raw-dot-rec){\jugem;}<>
       >
-      +item?:(Enumitem.spaced-itemfmt 0pt ){\qf;}<>
+      +item?:(raw-dot-rec){\qf;}<>
       +p{\jugem;}
     >
   >
 
   +p{\jugem;}
 
-  +listing?:(Enumitem.spaced-itemfmt 0pt){
+  +listing?:(raw-dot-rec){
     * \jugem;
     * \qf;
       ** \jugem;
@@ -91,21 +93,21 @@ document (|
 
   +p{\jugem;}
 
-  +listing?:(Enumitem.spaced-itemfmt 0pt){
+  +listing?:(raw-dot-rec){
     * \jugem;
     * \qf;
-      \sublist(Enumitem.spaced-itemfmt 0pt){
+      \sublist(raw-dot-rec){
         * \jugem;
-          \sublist(Enumitem.spaced-itemfmt 0pt){
+          \sublist(raw-dot-rec){
             * \qf;
             * \jugem;
           }
-            * \jugem;
+        * \jugem;
       }
-            * あああ
+    * あああ
   }
 
-  +listing?:(Enumitem.spaced-itemfmt 0pt){
+  +listing?:(raw-dot-rec){
     * \jugem;
     * \qf;
       ** \jugem;
@@ -114,5 +116,14 @@ document (|
   }
 
   +p{\jugem;}
+
+  +itemize(raw-dot-rec)<
+    +item{\jugem;}<
+      +p{\jugem;}
+      +p{\jugem;}
+    >
+  >
+
+
 
 >
