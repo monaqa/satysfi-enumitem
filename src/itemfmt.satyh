@@ -3,102 +3,58 @@
 @require: base/color-ext
 @require: gr
 
-type itemfmt = (|
+type labelwithemptybody =
+  | LabelDisplay  % テキストが空でもかまわずラベルを描画する。
+  | LabelInherit  % ラベルは描画せず、自身の子要素があればそこでラベルを一緒に描画してもらう。
+  | LabelIgnore   % ラベルを描かず、継承もしない。
+
+type itemconfig = (|
   % 基準となるインデントの量。
   % 本文の左端から indent-base だけ右にずらした線を基準線とよび、
   % ラベルの揃え方や本文のインデント量はこの基準線をもとに設定される。
-  indent-base: context -> length -> length;
+  indent-base: length -> length;
 
   % ラベルの直後に来るテキストのインデントの量。
   % args:
   %   width (length): ラベルのインラインボックス列の横幅。
-  indent-start: context -> length -> length;
+  indent-start: length -> length;
 
   % 現在のアイテムのインデックスを与えて、ラベルのインラインボックス列を返す。
-  label: context -> int list -> inline-boxes;
+  label: inline-boxes;
 
-  % ラベルに対応するテキストが空のときにラベル行を描画するかどうか。
-  display-label-with-empty-body: bool;
+  % ラベルに対応するテキストが空のとき、ラベルの描画をどのように行うか。
+  label-with-empty-body: labelwithemptybody;
 
   % 箇条書きの段落の上に追加であける余白（paragraph-margin による余白はそのまま入る）。
-  margin-top: context -> length;
+  margin-top: length;
 
   % 箇条書きの段落の下に追加であける余白（paragraph-margin による余白はそのまま入る）。
-  margin-bottom: context -> length;
+  margin-bottom: length;
 
   % 中身の context を変換する関数。
-  context-inner: context -> context;
+  context-inner: (context -> context);
 |)
 
 module EnumitemFormat : sig
 
 % builder
-  val init : itemfmt
-
-  val set-indent-base : (context -> length -> length) -> itemfmt -> itemfmt
-  val set-indent-start : (context -> length -> length) -> itemfmt -> itemfmt
-  val set-display-label-flag : bool -> itemfmt -> itemfmt
-
-  val set-label : inline-boxes -> itemfmt -> itemfmt
-  val set-label-by-context : (context -> inline-boxes) -> itemfmt -> itemfmt
-  val set-label-by-index : (context -> int -> inline-boxes) -> itemfmt -> itemfmt
-  val set-label-by-depth : (context -> int -> inline-boxes) -> itemfmt -> itemfmt
-  val set-label-by-nested-index : (context -> int list -> inline-boxes) -> itemfmt -> itemfmt
-
-  val set-margin : (context -> length) -> itemfmt -> itemfmt
-  val set-margin-top : (context -> length) -> itemfmt -> itemfmt
-  val set-margin-bottom : (context -> length) -> itemfmt -> itemfmt
-
-  val set-context-inner : (context -> context) -> itemfmt -> itemfmt
+  val init : context -> int list -> itemconfig
+  val default : itemconfig
 
 end = struct
 
-  let init = (|
-    indent-base = (fun _ _ -> 0pt);
-    indent-start = (fun _ _ -> 0pt);
-    label = (fun _ _ -> inline-nil);
-    display-label-with-empty-body = false;
-    margin-top = (fun _ -> 0pt);
-    margin-bottom = (fun _ -> 0pt);
-    context-inner = (fun x -> x);
+  let default = (|
+    indent-base = (fun _ -> 0pt);
+    indent-start = (fun _ -> 0pt);
+    label = inline-nil;
+    label-with-empty-body = LabelIgnore;
+    margin-top = 0pt;
+    margin-bottom = 0pt;
+    context-inner = (fun ctx -> ctx);
   |)
 
+  let init _ _ = default
+
 % setter
-
-  let set-indent-base indentf fmt = (| fmt with indent-base = indentf; |)
-  let set-indent-start indentf fmt = (| fmt with indent-start = indentf; |)
-
-  let set-label-by-nested-index labelf fmt = (| fmt with label = labelf; |)
-
-  let set-label-by-index labelf fmt =
-    let labelf-by-nested-index ctx idxlst =
-      match idxlst with
-      | [] -> labelf ctx 0
-      | x :: _ -> labelf ctx x
-    in
-    (| fmt with label = labelf-by-nested-index; |)
-
-  let set-label-by-depth labelf fmt =
-    let labelf-by-nested-index ctx idxlst =
-      labelf ctx (List.length idxlst)
-    in
-    (| fmt with label = labelf-by-nested-index; |)
-
-  let set-label-by-context labelf fmt =
-    let labelf-by-nested-index ctx _ = labelf ctx in
-    (| fmt with label = labelf-by-nested-index; |)
-
-  let set-label label fmt =
-    let labelf-by-nested-index _ _ = label in
-    (| fmt with label = labelf-by-nested-index; |)
-
-  let set-display-label-flag flg fmt = (| fmt with display-label-with-empty-body = flg; |)
-
-  let set-margin mgnf fmt =
-    (| fmt with margin-top = mgnf; margin-bottom = mgnf; |)
-  let set-margin-top mgnf fmt = (| fmt with margin-top = mgnf; |)
-  let set-margin-bottom mgnf fmt = (| fmt with margin-bottom = mgnf; |)
-
-  let set-context-inner f fmt = (| fmt with context-inner =f; |)
 
 end

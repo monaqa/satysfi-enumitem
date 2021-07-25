@@ -8,17 +8,18 @@
 open EnumitemFormatAlias
 
 % custom commands
-let-block ctx +ctx ctxf bt = read-block (ctxf ctx) bt
+
+let-block ctx +ctx ctxflst bt = read-block (ctxflst |> List.fold-left (fun ctx ctxf -> ctxf ctx) ctx) bt
 
 let document record bt = StdJaBook.document record '<%
-  +ctx(fun ctx -> (
+  +ctx[fun ctx -> (
     let fsize = get-font-size ctx in
     ctx |> set-paragraph-margin fsize fsize
         % |> set-font-size 5pt
         |> set-leading (fsize *' 1.6)
         |> set-code-text-command (command \code)
     % ctx
-  ))(bt);
+  )](bt);
   >%
 
 let font-ratio-latin = 1.
@@ -33,6 +34,9 @@ let-inline ctx \emph inner =
   in
     read-inline ctx-bf inner
 
+let-block +code code = 
+  '<+ctx[set-font-size 10pt; set-paragraph-margin 6pt 6pt; set-leading 16pt;]<+Code.code(code);>>
+
 let-block ctx +block-frame bt = 
   let decoset = VDecoSet.simple-frame 0.5pt Color.black Color.white in
   block-frame-breakable ctx (5pt, 5pt, 10pt, 10pt) decoset (fun ctx -> read-block ctx bt)
@@ -42,6 +46,53 @@ let-block +example str bt =
     +code(str);
     +block-frame(bt);
   >%
+
+let-block +description bt = '< +itemize(nofmt)(bt); >
+
+let-block +param name type- desc =
+  % let itemfmtf it ctx idxlst =
+  %   (|
+  %     (nofmt ctx []) with
+  %       indent-base = (fun _ -> get-font-size ctx *' 2.0);
+  %       indent-start = (fun wid -> wid +' get-font-size ctx *' 1.0);
+  %       label = read-inline ctx {\emph{#it;}}
+  %   |)
+  % in
+  % '< +item?:(itemfmtf name)({(#type-;)})(desc); >
+  '< +ditem?:(fun it -> {\emph{#it;}}){#name;}{(#type-;)}< #desc; > >
+
+let todo is-checked ctx idxlst =
+  let ib-square =
+    let fs value = (get-font-size ctx) *' value in
+    let fsize = fs 1.0 in
+    let gr-square (x, y) =
+      stroke 0.5pt Color.black (Gr.rectangle (0pt, 0pt) (fs 0.5, fs 0.5 ))
+        |> shift-graphics (x, y +' fs 0.1)
+    in
+    let gr-mark-done (x, y) =
+      stroke 0.5pt Color.black (
+        Gr.poly-line (fs (0.0 -. 0.1), fs 0.45) [(fs 0.15, fs 0.15); (fs 0.75, fs 0.85)])
+          |> shift-graphics (x, y +' fs 0.1)
+    in
+    let gr point =
+      if is-checked then
+        [gr-square point; gr-mark-done point]
+      else
+        [gr-square point]
+    in
+    inline-skip 10pt ++ (inline-graphics fsize fsize 0pt gr)
+  in
+  let indent wid = wid in
+  (|
+    EnumitemFormat.default with
+      indent-base = indent;
+      indent-start = indent;
+      label = ib-square
+  |)
+
+let-block +tdl bt = '< +itemize(todo false)(bt); >
+let-block +todo it = '< +item?:(todo false)(it)<> >
+let-block +done it = '< +item?:(todo true)(it)<> >
 
 let-inline \jugem = {
   寿限無，寿限無，五劫のすりきれ，
@@ -65,88 +116,581 @@ document (|
   show-toc = true;
 |) '<%
 
-  +p{\jugem;}
++section{パッケージの概要}<
 
-  +itemize(dot-arabic-rec)<
-    +item{\jugem;}<>
-    +item{\qf;}<
-      +p{あああ}
-      +item{\jugem;}<
-        +item{\qf;}<>
-        +item{\jugem;}<>
-      >
-      +item{\qf;}<>
-      +p{\jugem;}
-    >
-  >
-
-  +p{\jugem;}
-
-  +listing?:(dot-arabic-rec){
-    * \jugem;
-    * \qf;
-      ** \jugem;
-        *** \qf;
-        *** \jugem;
-      ** \qf;
+  +p{
+    `enumitem` は \SATySFi; にて豊富な箇条書きや番号付きのリストを提供するパッケージです。
+    標準にもすでに `itemize` という名前のパッケージが用意されているものの、
+    本パッケージではより自由度の高い箇条書きを提供します。
+    具体的には、以下のような箇条書きを書くことができます：
   }
-
-  +p{\jugem;}
-
-  +listing?:(dot-arabic-rec){
-    * \jugem;
-    * \qf;
-      \sublist(dot-arabic-rec){
-        * \jugem;
-          \sublist(dot-arabic-rec){
-            * \qf;
-            * \jugem;
-          }
-        * \jugem;
-      }
-    * あああ
-  }
-
-  +listing?:(dot-arabic-rec){
-    * \jugem;
-    * \qf;
-      ** \jugem;
-        *** \qf;
-        *** \jugem;
-
-    * ** *** aaa
-  }
-
-  +p{\jugem;}
-
-  +itemize(dot-arabic-rec)<
-    +item{\jugem;}<
-      +p{\jugem;}
-      +p{\jugem;}
-    >
-  >
-
-  +itemize(dot-arabic-rec)<
-    +item{\jugem;}<>
-    +item?:(raw-arabic){\jugem;}<>
-  >
-
-  +itemize(nofmt)<
-
-    +ditem{ほげふが}{\jugem;}
-    +ditemln{ぴよぴよ}<
-      +p{\jugem;}
-    >
-
-  >
-
-  +p{\jugem;}
-
   +listing{
-    * \jugem;
-    * 
-      ** \jugem;
+    * デフォルトで豊富なスタイルのラベルを選択できる
+    * 番号付き箇条書き環境をネストさせることができる
+    * ネストごとに箇条書きのスタイルを変更できる
+    * 箇条書きのラベルの体裁を項目ごとに変更できる
+    * 定義リストを作成できる
+    * ユーザ自身がスタイルを拡張できる
+  }
+  +p{
+    本ドキュメントは `enumitem` パッケージ v3.0.0 の仕様及び使い方を述べたものです。
+    旧バージョン、すなわちメジャーバージョンが 0, 1, 2 のいずれかであるものとの互換性は無く、
+    たとえコマンド名が同じであっても引数のルールが異なることなどがあります。
+    バージョンの違いに注意してください。
   }
 
+>
+
++section{`enumitem` をはじめよう}<
+
+  +subsection{`enumitem` パッケージのインストール}<
+    +p{
+      `enumitem` パッケージは Satyrographos によってインストールすることができます。
+    }
+
+    +code(```
+    opam install satysfi-enumitem
+    satyrographos install
+    ```);
+
+    +p{
+      `opam list satysfi-enumitem` などのコマンドで
+      バージョン3系がインストールされていることを確認したら、次に進みましょう。
+    }
+  >
+
+  +subsection{パッケージの読み込み}<
+    +p{
+      \SATySFi; の文書ファイルやヘッダファイルで外部のパッケージを用いるには以下のようにします。
+    }
+
+    +code(```
+    @require: enumitem/enumitem
+    ```);
+
+    +p{
+      さらに、 `EnumitemFormatAlias` というモジュールも open しておきましょう。
+      これは enumitem パッケージで定義されているモジュールの一つであり、
+      箇条書きの体裁を変更するための関数、定義リスト専用のコマンドなど便利な機能がまとまっています。
+      まとめると、文書ファイルの場合は以下のような文言をファイルに書けばよいということになります。
+      「本文」のところは、各クラスファイルの書き方に従ってください。
+    }
+
+    +code(```
+    @require: enumitem/enumitem
+
+    open EnumitemFormatAlias
+
+    in
+
+    （本文）
+    ```);
+
+    +p{
+      準備ができたら、本文のどこかに以下のように書いてみましょう。
+    }
+    +code(```
+      +listing{
+        * foo
+        * bar
+          ** barfoo
+          ** barbar
+        * baz
+      }
+    ```);
+
+    +p{
+      もし正常にパッケージが読み込まれていれば、以下のように出力されるはずです。
+    }
+
+    +block-frame<
+      +listing{
+        * foo
+        * bar
+          ** barfoo
+          ** barbar
+        * baz
+      }
+    >
+
+  >
+>
+
++section{Gallery}<
+
+  +subsection{基本的なコマンド}<
+    +p{
+      `enumitem` は `+listing` 及び `+enumerate` コマンドを提供します。
+      標準の `itemize` パッケージを使ったことがある人にとっては馴染み深いでしょう。
+      使い方は標準のコマンドと（オプション引数を除き）ほぼ変わりません。
+    }
+
+    +example(```
+      +listing{
+        * hoge
+        * fuga
+          ** fuga1
+            *** fuga11
+            *** fuga12
+          ** fuga2
+      }
+    ```)<%
+      +listing{
+        * hoge
+        * fuga
+          ** fuga1
+            *** fuga11
+            *** fuga12
+          ** fuga2
+      }
+    >%
+
+    +example(```
+      +enumerate{
+        * hoge
+        * fuga
+          ** fuga1
+            *** fuga11
+            *** fuga12
+          ** fuga2
+      }
+    ```)<%
+      +enumerate{
+        * hoge
+        * fuga
+          ** fuga1
+            *** fuga11
+            *** fuga12
+          ** fuga2
+      }
+    >%
+
+  >
+
+  +subsection{ラベルの体裁の設定}<
+    
+  >
+
+  +subsection{ラベルのユーザ定義}<
+    
+  >
+
+  +subsection{応用：定義リスト}<
+    
+  >
+
+  +subsection{応用：ToDo リストの作成}<
+    
+  >
+
+>
+
++section{`enumitem` の設計思想}<
+  +p{
+    `enumitem` v3.0.0 は以下の思想を元に設計されています。
+  }
+  +listing{
+    * \SATySFi; の文法に備わっている箇条書き用の構文は極力尊重する。
+    * 箇条書き用の構文でカバーできない機能については、専用のコマンドで対応する。
+    * 関数を用いてラベルの体裁を指定することで、ユーザによる拡張ができるようにする。
+  }
+
+  +subsection{2種類の表現方法}<
+    +p{
+      簡潔に書ける箇条書きと自由度の高い箇条書きを両立させるため、
+      `enumitem` パッケージでは箇条書きの木構造を表現する2種類の表現方法が用意されています。
+    }
+
+    +block-frame<
+      +listing?:(listing-default-label){
+        * aaa
+        * bbb
+          ** bbb の子1
+          ** bbb の子2
+            *** bbb の子2 の子1
+        * ccc
+          ** ccc の子1
+          ** ccc の子2
+      }
+    >
+
+    % +block-frame<
+    %   +listing{
+    %     * aaa
+    %     * bbb
+    %       \sublist(listing-default-label){
+    %         * bbb の子1
+    %         * bbb の子2
+    %           \sublist(listing-default-label){
+    %             * bbb の子2 の子1
+    %           }
+    %       }
+    %     * ccc
+    %       \sublist(listing-default-label){
+    %         * ccc の子1
+    %         * ccc の子2
+    %       }
+    %   }
+    % >
+    % 
+    % +block-frame<
+    %   +itemize(listing-default-label)<
+    %     +item{aaa}<>
+    %     +item{bbb}<
+    %       +item{bbb の子1}<>
+    %       +item{bbb の子2}<
+    %         +item{bbb の子2 の子1}<>
+    %       >
+    %     >
+    %     +item{ccc}<
+    %       +item{ccc の子1}<>
+    %       +item{ccc の子2}<>
+    %     >
+    %   >
+    % >
+    % 
+    % +block-frame<
+    %   +itemize(listing-default-label)<
+    %     +item{aaa}<>
+    %     +item{bbb}<
+    %       +sublist(listing-default-label){
+    %         * bbb の子1
+    %         * bbb の子2
+    %           ** bbb の子2の子1
+    %       }
+    %     >
+    %     +sublist(listing-default-label){
+    %       * ccc
+    %         ** ccc の子1
+    %         ** ccc の子2
+    %     }
+    %   >
+    % >
+    % 
+    % +block-frame<
+    %   +listing{
+    %     * aaa
+    %     * bbb
+    %       \subitem(listing-default-label)<
+    %         +item{bbb の子1}<>
+    %         +item{bbb の子2}<
+    %           +item{bbb の子2 の子1}<>
+    %         >
+    %       >
+    %     * ccc
+    %       \subitem(listing-default-label)<
+    %         +item{ccc の子1}<>
+    %         +item{ccc の子2}<>
+    %       >
+    %   }
+    % >
+
+    +p{
+      1つは \SATySFi; の箇条書きを表す専用の構文をそのまま用いてネストを表現する方法。
+      こちらは標準の itemize パッケージでも採用されているインターフェースであり、簡単に記述できるのが利点です。
+      ただし、設定できる項目の自由度はあまり高くありません。
+      便宜上、ここではこちらを\emph{糖衣構文ベースの記法}と呼びます。
+    }
+
+    +code(```
+    +listing?:(listing-default-label){
+      * aaa
+      * bbb
+        ** bbb の子1
+        ** bbb の子2
+          *** bbb の子2 の子1
+      * ccc
+        ** ccc の子1
+        ** ccc の子2
+    }
+    ```);
+
+    +p{
+      なお、 `+listing` のオプション引数のデフォルトは `listing-default-label` であるため、
+      上のコードの `?:(listing-default-label)` に相当する箇所は省略することができます
+      （次の例との比較のためあえてつけています）。
+    }
+
+    +p{
+      もう1つは \SATySFi; の箇条書き専用構文を用いることなく、
+      `+itemize` 及び `+item` のみを用いてブロックテキストベースで箇条書きのネストを表現する方法。
+      星印 `*` だけでアイテムの始まりを示すことができた糖衣構文ベースの記法とは異なり、
+      項目のたびに `+item` を書く必要があります。
+      記法としては冗長になるものの、箇条書きを記述する際の自由度が高いというメリットがあります。
+      こちらを\emph{ブロックベースの記法}と呼びます。
+    }
+
+    +code(```
+      +itemize(listing-default-label)<
+        +item{aaa}<>
+        +item{bbb}<
+          +item{bbb の子1}<>
+          +item{bbb の子2}<
+            +item{bbb の子2 の子1}<>
+          >
+        >
+        +item{ccc}<
+          +item{ccc の子1}<>
+          +item{ccc の子2}<>
+        >
+      >
+    ```);
+
+
+    +p{
+      ここで示した2つのコードは、どちらも最終的には同様の結果となることに注意してください。
+      実は1番目の糖衣構文ベースの記法は、まず内部でブロックベースの記法へと展開されてから処理されます。
+    }
+
+  >
+
+  +subsection{ブロックベース記法の使いみち}<
+
+    +p{
+      上で示したコードは、糖衣構文ベースの記法でもブロックベースの記法でも、
+      どちらでも実現可能な箇条書きでした。
+      その場合は、より簡潔に書ける糖衣構文ベースの記法を用いるべきでしょう。
+      ブロックベースの記法の利点は自由度の高さにあります。
+      つまり、糖衣構文ベースでは実現できない箇条書きも表現することができるのです。
+    }
+
+    +p{
+      1つは箇条書きの途中で項目の体裁を変更すること。
+    }
+
+    +example(```
+    ```)<
+      +itemize(listing-default-label)<
+        +item{aaa}<>
+        +item?:(raw-arabic){bbb}<
+          +item{bbb の子1}<>
+          +item{bbb の子2}<
+            +item{bbb の子2 の子1}<>
+          >
+        >
+        +item?:(dot-arabic-rec){ccc}<
+          +item{ccc の子1}<>
+          +item{ccc の子2}<>
+        >
+      >
+    >
+
+    +example(```
+    ```)<
+      +itemize(listing-default-label)<
+        +item{aaa}<>
+        +item({bbb})?:(raw-arabic)<
+          +item{bbb の子1}<>
+          +item{bbb の子2}<
+            +item{bbb の子2 の子1}<>
+          >
+        >
+        +item({ccc})?:(dot-arabic-rec)<
+          +item{ccc の子1}<>
+          +item{ccc の子2}<>
+        >
+      >
+    >
+
+    +p{
+      もう1つは、項目の下に任意のブロックテキストを配置できること。
+    }
+
+    +example(```
+      +itemize(listing-default-label)<
+        +item{ここは最初の段落です。ラベルは最初の段落の冒頭に付きます。}<
+          +pn{
+            ここは2番目の段落です。
+            2番目以降であれば自由にブロックテキストを挿入できます。
+            以下はコードブロックを挿入する例。
+          }
+          +code(`aaa`);
+          +item{このように、途中で箇条書きを挟むことができます。}<
+            +item{当然ネストさせることもできます。}<>
+          >
+          +pn{
+            箇条書きを挟んだ後、元の階層に戻って再び段落を再開することができます。
+          }
+        >
+      >
+    ```)<
+      +itemize(listing-default-label)<
+        +item{ここは最初の段落です。ラベルは最初の段落の冒頭に付きます。}<
+          +pn{
+            ここは2番目の段落です。
+            2番目以降であれば自由にブロックテキストを挿入できます。
+            以下はコードブロックを挿入する例。
+          }
+          +code(`aaa`);
+          +item{このように、途中で箇条書きを挟むことができます。}<
+            +item{当然ネストさせることもできます。}<>
+          >
+          +pn{
+            箇条書きを挟んだ後、元の階層に戻って再び段落を再開することができます。
+          }
+        >
+      >
+    >
+
+    +p{
+      これらを応用すれば、定義リストのような箇条書きを実現することもできます。
+    }
+
+    +example(```
+    ```)<
+      +itemize(nofmt)<
+        +item?:(description {定義項目1}){これが定義内容です。}<>
+        +item?:(description {ちょっと長めの定義項目2}){
+          これがちょっと長めの定義内容です。項目だけでなく本文も少しだけ長めです。
+        }<>
+        +item?:(description-newline {だいぶ長いから改行挟んだほうが良い定義項目3}){}<
+          +pn{
+            こちらは改行を挟んでおり、本文も長めです。
+            このように通常の段落を入れることができます。
+          }
+        >
+      >
+    >
+
+  >
+
+  +subsection{2つの記法の混合}<
+
+    +p{
+      2つの記法は組み合わせて使用することもできます。
+    }
+
+    +code(```
+      +itemize(listing-default-label)<
+        +item{aaa}<>
+        +item{bbb}<
+          +sublist(listing-default-label){
+            * bbb の子1
+            * bbb の子2
+              ** bbb の子2の子1
+          }
+        >
+        +sublist(listing-default-label){
+          * ccc
+            ** ccc の子1
+            ** ccc の子2
+        }
+      >
+    ```);
+
+    +code(```
+      +listing{
+        * aaa
+        * bbb
+          \subitem(listing-default-label)<
+            +item{bbb の子1}<>
+            +item{bbb の子2}<
+              +item{bbb の子2 の子1}<>
+            >
+          >
+        * ccc
+          \subitem(listing-default-label)<
+            +item{ccc の子1}<>
+            +item{ccc の子2}<>
+          >
+      }
+    ```);
+
+    +p{
+      `\sublist` を用いれば、糖衣構文ベースの記法を（糖衣構文を直接使わず）ネストさせることができます。
+    }
+
+    +code(```
+      +listing{
+        * aaa
+        * bbb
+          \sublist(listing-default-label){
+            * bbb の子1
+            * bbb の子2
+              \sublist(listing-default-label){
+                * bbb の子2 の子1
+              }
+          }
+        * ccc
+          \sublist(listing-default-label){
+            * ccc の子1
+            * ccc の子2
+          }
+      }
+    ```);
+  >
+
+>
+
++section{機能一覧}<
+
+  +subsection{`Enumitem` モジュール}<
+
+    +p{
+      `Enumitem` モジュールは本パッケージの根幹となるコマンドを定義します。
+      最も大切なのは `+item` コマンドであり、 `Enumitem` パッケージで提供される主要なコマンドは
+      全て `+item` を用いたブロックボックス列に展開されるようになっています。
+    }
+
+    +p{
+      `+item` の引数は以下のようになっています。
+    }
+
+    +code(```
+    +item?:( itemfmt-self )({ text-body })?:( itemfmt-child )< children >
+    ```);
+
+    +description<
+
+      +param{itemfmt-self}{`itemfmt`、オプション}<
+        +p{
+          自分自身の項目の体裁。
+          省略した場合は、自身の親で設定されたフォーマットが用いられる。
+          あくまで自分自身の項目のみに影響があり、後述の通り、自身の子要素には反映されない。
+        }
+      >
+
+      +param{text-body}{`inline-text`、必須}<
+        +p{
+          自分自身の項目の本文。ラベルは本文の左端に付く。
+          空のインラインテキストを指定することもできる。
+          その場合はフォーマットの `display-label-with-empty-body` オプションによってラベルが付くかどうか変化する。
+        }
+      >
+
+      +param{itemfmt-child}{`itemfmt`、オプション}<
+        +p{
+          子要素の項目の体裁のデフォルト値。省略した場合、
+          子要素は自身の親で設定されたフォーマットを引き継ぐ（`itemfmt-self` の値は用いられない）。
+        }
+      >
+
+    >
+
+  >
+
+  +subsection{`itemfmt` 型}<
+
+    +p{
+      `itemfmt` 型は `enumitem` パッケージに欠かせない型です。
+    }
+    
+  >
+
+  +itemize(dot-arabic-rec)<
+    +item{}<
+      +p{foo}
+      +item{bar}< >
+    >
+  >
+
+  +tdl<
+    +todo{あああああ}
+    +todo{あああああ}
+    +done{あああああ}
+    +todo{あああああ}
+  >
+
+>
 
 >
