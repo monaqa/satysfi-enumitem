@@ -41,7 +41,17 @@ module EnumitemFormat : sig
   val init : context -> int list -> itemconfig
   val default : itemconfig
 
+  val new : (context -> int list -> inline-boxes) -> context -> int list -> itemconfig
+  val new-unordered : (context -> inline-boxes) -> context -> int list -> itemconfig
+  val new-unordered-with-depth : (context -> int -> inline-boxes) -> context -> int list -> itemconfig
+  val new-ordered : (context -> int -> inline-boxes) -> context -> int list -> itemconfig
+  val new-description : length?-> (inline-text -> inline-text) -> inline-text -> context -> int list -> itemconfig
+
+  % val change-by-depth : (context -> int list -> itemconfig) list -> context -> int list -> itemconfig
+
 end = struct
+
+  let id x = x
 
   let default = (|
     indent-base = (fun _ -> 0pt);
@@ -50,10 +60,73 @@ end = struct
     label-with-empty-body = LabelIgnore;
     margin-top = 0pt;
     margin-bottom = 0pt;
-    context-inner = (fun ctx -> ctx);
+    context-inner = id;
   |)
 
   let init _ _ = default
+
+  let new-unordered labelf  ctx _ =
+    (|
+      indent-base = id;
+      indent-start = id;
+      label = labelf ctx;
+      label-with-empty-body = LabelIgnore;
+      margin-top = 0pt;
+      margin-bottom = 0pt;
+      context-inner = id;
+    |)
+
+  let new-unordered-with-depth labelf  ctx idxlst =
+    (|
+      indent-base = id;
+      indent-start = id;
+      label = labelf ctx (List.length idxlst);
+      label-with-empty-body = LabelIgnore;
+      margin-top = 0pt;
+      margin-bottom = 0pt;
+      context-inner = id;
+    |)
+
+  let new-ordered labelf  ctx idxlst =
+    let label = match idxlst with
+      | [] -> labelf ctx 0
+      | idx :: _ -> labelf ctx idx
+    in
+    (|
+      indent-base = id;
+      indent-start = id;
+      label = label;
+      label-with-empty-body = LabelInherit;
+      margin-top = 0pt;
+      margin-bottom = 0pt;
+      context-inner = id;
+    |)
+
+  let new labelf  ctx idxlst =
+    (|
+      indent-base = id;
+      indent-start = id;
+      label = labelf ctx idxlst;
+      label-with-empty-body = LabelIgnore;
+      margin-top = 0pt;
+      margin-bottom = 0pt;
+      context-inner = id;
+    |)
+
+  let new-description ?:min-indent itf  it ctx idxlst =
+    let min-indent = min-indent |> Option.from (get-font-size ctx *' 2.0) in
+    let indent wid = 
+      Length.max min-indent (wid +' get-font-size ctx *' 1.0)
+    in
+    (|
+      indent-base = (fun _ -> min-indent);
+      indent-start = indent;
+      label = read-inline ctx (itf it);
+      label-with-empty-body = LabelDisplay;
+      margin-top = 0pt;
+      margin-bottom = 0pt;
+      context-inner = id;
+    |)
 
 % setter
 

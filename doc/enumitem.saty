@@ -49,16 +49,9 @@ let-block +example str bt =
 
 let-block +description bt = '< +itemize(nofmt)(bt); >
 
+let-block +dt dt ib-dd = '< +ditem?:(fun it -> {\emph{#it;}})(dt)(ib-dd)<> >
+
 let-block +param name type- desc =
-  % let itemfmtf it ctx idxlst =
-  %   (|
-  %     (nofmt ctx []) with
-  %       indent-base = (fun _ -> get-font-size ctx *' 2.0);
-  %       indent-start = (fun wid -> wid +' get-font-size ctx *' 1.0);
-  %       label = read-inline ctx {\emph{#it;}}
-  %   |)
-  % in
-  % '< +item?:(itemfmtf name)({(#type-;)})(desc); >
   '< +ditem?:(fun it -> {\emph{#it;}}){#name;}{(#type-;)}< #desc; > >
 
 let todo is-checked ctx idxlst =
@@ -138,6 +131,24 @@ document (|
     たとえコマンド名が同じであっても引数のルールが異なることなどがあります。
     バージョンの違いに注意してください。
   }
+
+  +subsection{用語集}<
+
+    +p{
+      ここでは以下のような用語を用います。
+    }
+
+    +description<
+      +dt{箇条書き}{ いくつかの単語や文章、段落などを分けて書き並べる表現手段のこと。 }
+      +dt{項目}{ 箇条書きを構成する要素。 }
+      +dt{ラベル}{
+        箇条書きの開始を表すために先頭につける記号や文字の列。
+        番号付きの箇条書きであれば “1.” や “(1)” といった文字列を指す。
+      }
+      +dt{番号なし箇条書き}{数字}
+    >
+
+  >
 
 >
 

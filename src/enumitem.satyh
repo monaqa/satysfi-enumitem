@@ -13,6 +13,7 @@ module Enumitem : sig
 
   direct +item : [(context -> int list -> itemconfig)?; inline-text; (context -> int list -> itemconfig)?; block-text]  block-cmd
   direct +itemize : [context -> int list -> itemconfig; block-text]  block-cmd
+  direct \itemize : [context -> int list -> itemconfig; block-text]  inline-cmd
   direct \sublist: [context -> int list -> itemconfig; itemize] inline-cmd
   direct +sublist: [context -> int list -> itemconfig; itemize] block-cmd
   direct \subitem: [context -> int list -> itemconfig; block-text] inline-cmd
@@ -151,6 +152,10 @@ end = struct
     in
     block-frame-breakable ctx (indent-base, 0pt, 0pt, 0pt) empty-decoset bbf
 
+  let-inline ctx \embed-block bt =
+    let ib-block = embed-block-breakable ctx (read-block ctx '<#bt;>) in
+    inline-fil ++ ib-block ++ omit-skip-after
+
   let-block +itemize itemfmt bt =
     '< +item?:(EnumitemFormat.init)({})?:(itemfmt)(bt); >
 
@@ -160,6 +165,8 @@ end = struct
                |> List.fold-left (fun bt1 bt2 -> '<#bt1;#bt2;>) '<>
     in
     '< +item?:(itemfmt)(it)(bt-children); >
+
+  let-inline \itemize itemfmt bt = {\embed-block<+itemize(itemfmt)(bt);>}
 
   let-inline ctx \sublist itemfmt (Item(_, children)) =
     let bt-children =
@@ -177,10 +184,6 @@ end = struct
     let () = sublist-stack |> EnumitemParam.set bt in
     inline-nil
 
-  let-inline ctx \embed-block bt =
-    let ib-block = embed-block-breakable ctx (read-block ctx '<#bt;>) in
-    inline-fil ++ ib-block ++ omit-skip-after
-
 end
 
 module EnumitemFormatUtil : sig
@@ -193,10 +196,10 @@ module EnumitemFormatUtil : sig
   val to-Alph  : int -> inline-text
 
 % index decolation function (ordered)
-  val raw     : (int -> inline-text) -> context -> int list -> inline-boxes
-  val dot     : (int -> inline-text) -> context -> int list -> inline-boxes
-  val paren   : (int -> inline-text) -> context -> int list -> inline-boxes
-  val bracket : (int -> inline-text) -> context -> int list -> inline-boxes
+  val raw     : (int -> inline-text) -> context -> int -> inline-boxes
+  val dot     : (int -> inline-text) -> context -> int -> inline-boxes
+  val paren   : (int -> inline-text) -> context -> int -> inline-boxes
+  val bracket : (int -> inline-text) -> context -> int -> inline-boxes
 
 % index decolation function (unordered)
   val shape-bullet       : context -> inline-boxes
@@ -262,29 +265,25 @@ end = struct
 
 % index decolation function (ordered)
 
-  let raw num-format ctx idxlst =
-    let idx = idxlst |> List.nth 0 |> Option.from 0 in
+  let raw num-format ctx idx =
     let it-num = num-format idx in
     let ib-label = read-inline ctx {#it-num;} in
     let (wid-label, _, _) = get-natural-metrics ib-label in
     ib-label
 
-  let dot num-format ctx idxlst =
-    let idx = idxlst |> List.nth 0 |> Option.from 0 in
+  let dot num-format ctx idx =
     let it-num = num-format idx in
     let ib-label = read-inline ctx {#it-num;.} in
     let (wid-label, _, _) = get-natural-metrics ib-label in
     ib-label
 
-  let paren num-format ctx idxlst =
-    let idx = idxlst |> List.nth 0 |> Option.from 0 in
+  let paren num-format ctx idx =
     let it-num = num-format idx in
     let ib-label = read-inline ctx {(#it-num;)} in
     let (wid-label, _, _) = get-natural-metrics ib-label in
     ib-label
 
-  let bracket num-format ctx idxlst =
-    let idx = idxlst |> List.nth 0 |> Option.from 0 in
+  let bracket num-format ctx idx =
     let it-num = num-format idx in
     let ib-label = read-inline ctx {[#it-num;]} in
     let (wid-label, _, _) = get-natural-metrics ib-label in
@@ -350,7 +349,7 @@ module EnumitemFormatAlias : sig
   val paren-Alph     : context -> int list -> itemconfig
   val bracket-Alph   : context -> int list -> itemconfig
 
-  val dot-arabic-rec: context -> int list -> itemconfig
+  val dot-arabic-rec : context -> int list -> itemconfig
 
 % label (unordered list)
 
@@ -365,9 +364,9 @@ module EnumitemFormatAlias : sig
   val listing-default-label: context -> int list -> itemconfig
   val enumerate-default-label: context -> int list -> itemconfig
 
-  direct +listing: [(context -> int list -> itemconfig)?; itemize] block-cmd
+  direct +listing  : [(context -> int list -> itemconfig)?; itemize] block-cmd
   direct +enumerate: [(context -> int list -> itemconfig)?; itemize] block-cmd
-  direct \listing: [(context -> int list -> itemconfig)?; itemize] inline-cmd
+  direct \listing  : [(context -> int list -> itemconfig)?; itemize] inline-cmd
   direct \enumerate: [(context -> int list -> itemconfig)?; itemize] inline-cmd
 
   val +ditem: [(inline-text -> inline-text)?; inline-text; inline-text; block-text] block-cmd
@@ -379,17 +378,13 @@ end = struct
   let nofmt = init
 
 % formats
-  let enum-format enumeratef  ctx idxlst =
-    let indentf wid-label = get-font-size ctx *' 2.0 in
-    (|
-      (EnumitemFormat.init ctx idxlst) with
-        indent-base = indentf;
-        indent-start = indentf;
-        label = EnumitemFormatUtil.(
-          enumeratef ctx idxlst |> align-right (get-font-size ctx *' 1.5)
-        );
-        label-with-empty-body = LabelInherit
-    |)
+  let enum-format enumeratef =
+    let labelf ctx idx =
+      let fsizer r = get-font-size ctx *' r in
+      (enumeratef ctx idx |> EnumitemFormatUtil.align-right (fsizer 1.5))
+        ++ inline-skip (fsizer 0.5)
+    in
+    EnumitemFormat.new-ordered labelf
 
   let raw-arabic = enum-format EnumitemFormatUtil.(raw to-arabic)
   let dot-arabic = enum-format EnumitemFormatUtil.(dot to-arabic)
@@ -432,41 +427,32 @@ end = struct
         label = label;
     |)
 
-  let bullet ctx _ =
-    let indentf wid-label = get-font-size ctx *' 1.5 in
-    (|
-      (EnumitemFormat.init ctx []) with
-        indent-base = indentf;
-        indent-start = indentf;
-        label = EnumitemFormatUtil.(
-          shape-bullet ctx |> align-right (get-font-size ctx *' 1.5)
-        )
-    |)
+  let bullet =
+    let labelf ctx =
+      let l = get-font-size ctx *' 0.5 in
+      inline-skip l ++ EnumitemFormatUtil.shape-bullet ctx
+    in
+    EnumitemFormat.new-unordered labelf
 
-  let white-bullet ctx _ =
-    let indentf wid-label = get-font-size ctx *' 1.5 in
-    (|
-      (EnumitemFormat.init ctx []) with
-        indent-base = indentf;
-        indent-start = indentf;
-        label = EnumitemFormatUtil.(
-          shape-white-bullet ctx |> align-right (get-font-size ctx *' 1.5)
-        )
-    |)
+  let white-bullet =
+    let labelf ctx =
+      let l = get-font-size ctx *' 0.5 in
+      inline-skip l ++ EnumitemFormatUtil.shape-white-bullet ctx
+    in
+    EnumitemFormat.new-unordered labelf
 
 % command
 
   let listing-default-label ctx idxlst =
-    if List.length idxlst mod 2 == 1 then
-      bullet ctx []
-    else
-      white-bullet ctx []
+    match List.length idxlst mod 2 with
+    | 1 -> bullet ctx idxlst
+    | _ -> white-bullet ctx idxlst
 
   let enumerate-default-label ctx idxlst =
-    if List.length idxlst mod 2 == 1 then
-      bullet ctx []
-    else
-      white-bullet ctx []
+    match List.length idxlst mod 3 with
+    | 1 -> dot-arabic  ctx idxlst
+    | 2 -> paren-alph  ctx idxlst
+    | _ -> paren-roman ctx idxlst
 
   let-rec convert-item-to-bt (Item(it, children)) =
     let bt-children =
