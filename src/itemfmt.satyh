@@ -9,15 +9,10 @@ type labelwithemptybody =
   | LabelIgnore   % ラベルを描かず、継承もしない。
 
 type itemconfig = (|
-  % 基準となるインデントの量。
-  % 本文の左端から indent-base だけ右にずらした線を基準線とよび、
+  % 基準となるインデント量。
+  % 本文の左端から indent だけ右にずらした線を基準線とよび、
   % ラベルの揃え方や本文のインデント量はこの基準線をもとに設定される。
-  indent-base: length -> length;
-
-  % ラベルの直後に来るテキストのインデントの量。
-  % args:
-  %   width (length): ラベルのインラインボックス列の横幅。
-  indent-start: length -> length;
+  indent: length -> length;
 
   % 現在のアイテムのインデックスを与えて、ラベルのインラインボックス列を返す。
   label: inline-boxes;
@@ -42,20 +37,21 @@ module EnumitemFormat : sig
   val default : itemconfig
 
   val new : (context -> int list -> inline-boxes) -> context -> int list -> itemconfig
+
   val new-unordered : (context -> inline-boxes) -> context -> int list -> itemconfig
   val new-unordered-with-depth : (context -> int -> inline-boxes) -> context -> int list -> itemconfig
   val new-ordered : (context -> int -> inline-boxes) -> context -> int list -> itemconfig
   val new-description : length?-> (inline-text -> inline-text) -> inline-text -> context -> int list -> itemconfig
 
-  % val change-by-depth : (context -> int list -> itemconfig) list -> context -> int list -> itemconfig
+  val set-indent : (context -> length -> length) -> (context -> int list -> itemconfig) -> context -> int list -> itemconfig
+  val set-context-inner : (context -> int list -> context) -> (context -> int list -> itemconfig) -> context -> int list -> itemconfig
 
 end = struct
 
   let id x = x
 
   let default = (|
-    indent-base = (fun _ -> 0pt);
-    indent-start = (fun _ -> 0pt);
+    indent = (fun _ -> 0pt);
     label = inline-nil;
     label-with-empty-body = LabelIgnore;
     margin-top = 0pt;
@@ -67,8 +63,7 @@ end = struct
 
   let new-unordered labelf  ctx _ =
     (|
-      indent-base = id;
-      indent-start = id;
+      indent = id;
       label = labelf ctx;
       label-with-empty-body = LabelIgnore;
       margin-top = 0pt;
@@ -78,8 +73,7 @@ end = struct
 
   let new-unordered-with-depth labelf  ctx idxlst =
     (|
-      indent-base = id;
-      indent-start = id;
+      indent = id;
       label = labelf ctx (List.length idxlst);
       label-with-empty-body = LabelIgnore;
       margin-top = 0pt;
@@ -93,8 +87,7 @@ end = struct
       | idx :: _ -> labelf ctx idx
     in
     (|
-      indent-base = id;
-      indent-start = id;
+      indent = id;
       label = label;
       label-with-empty-body = LabelInherit;
       margin-top = 0pt;
@@ -104,8 +97,7 @@ end = struct
 
   let new labelf  ctx idxlst =
     (|
-      indent-base = id;
-      indent-start = id;
+      indent = id;
       label = labelf ctx idxlst;
       label-with-empty-body = LabelIgnore;
       margin-top = 0pt;
@@ -119,8 +111,7 @@ end = struct
       Length.max min-indent (wid +' get-font-size ctx *' 1.0)
     in
     (|
-      indent-base = (fun _ -> min-indent);
-      indent-start = indent;
+      indent = (fun _ -> min-indent);
       label = read-inline ctx (itf it);
       label-with-empty-body = LabelDisplay;
       margin-top = 0pt;
@@ -129,5 +120,13 @@ end = struct
     |)
 
 % setter
+
+  let set-indent indentf fmt  ctx idxlst =
+    (|
+      (fmt ctx idxlst) with
+        indent = (indentf ctx);
+    |)
+
+  let set-context-inner ctxf fmt  ctx idxlst = (| (fmt ctx idxlst) with context-inner = (fun ctx -> ctxf ctx idxlst); |)
 
 end

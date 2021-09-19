@@ -3,6 +3,7 @@
 @require: color
 @require: hdecoset
 @require: vdecoset
+@require: base/length
 @import: ../src/enumitem
 
 open EnumitemFormatAlias
@@ -21,6 +22,10 @@ let document record bt = StdJaBook.document record '<%
     % ctx
   )](bt);
   >%
+
+let-inline ctx \cjk it =
+  let ctx = ctx |> set-dominant-narrow-script Kana in
+  read-inline ctx it
 
 let font-ratio-latin = 1.
 let font-ratio-cjk = 0.88
@@ -49,7 +54,10 @@ let-block +example str bt =
 
 let-block +description bt = '< +itemize(nofmt)(bt); >
 
-let-block +dt dt ib-dd = '< +ditem?:(fun it -> {\emph{#it;}})(dt)(ib-dd)<> >
+let-block +dt dt it-dd =
+  '<
+    +ditem?:(fun it -> {\emph{#it;}}){#dt;}{#it-dd;}<>
+  >
 
 let-block +param name type- desc =
   '< +ditem?:(fun it -> {\emph{#it;}}){#name;}{(#type-;)}< #desc; > >
@@ -78,8 +86,7 @@ let todo is-checked ctx idxlst =
   let indent wid = wid in
   (|
     EnumitemFormat.default with
-      indent-base = indent;
-      indent-start = indent;
+      indent = indent;
       label = ib-square
   |)
 
@@ -139,13 +146,21 @@ document (|
     }
 
     +description<
-      +dt{箇条書き}{ いくつかの単語や文章、段落などを分けて書き並べる表現手段のこと。 }
+      +dt{箇条書き}{
+        いくつかの単語や文章、段落などを分けて書き並べたリストのこと。
+        ここでは本文と独立の段落で組むものを扱う。
+      }
       +dt{項目}{ 箇条書きを構成する要素。 }
       +dt{ラベル}{
         箇条書きの開始を表すために先頭につける記号や文字の列。
         番号付きの箇条書きであれば “1.” や “(1)” といった文字列を指す。
       }
-      +dt{番号なし箇条書き}{数字}
+      +dt{番号付き箇条書き}{
+        番号や順序のわかる記号を用いてラベルがふられた箇条書き。
+      }
+      +dt{番号無し箇条書き}{
+        順序のない記号など用いてラベルがふられた箇条書き。
+      }
     >
 
   >
@@ -225,11 +240,8 @@ document (|
     >
 
   >
->
 
-+section{Gallery}<
-
-  +subsection{基本的なコマンド}<
+  +subsection{基本的なコマンドの使用}<
     +p{
       `enumitem` は `+listing` 及び `+enumerate` コマンドを提供します。
       標準の `itemize` パッケージを使ったことがある人にとっては馴染み深いでしょう。
@@ -277,23 +289,6 @@ document (|
     >%
 
   >
-
-  +subsection{ラベルの体裁の設定}<
-    
-  >
-
-  +subsection{ラベルのユーザ定義}<
-    
-  >
-
-  +subsection{応用：定義リスト}<
-    
-  >
-
-  +subsection{応用：ToDo リストの作成}<
-    
-  >
-
 >
 
 +section{`enumitem` の設計思想}<
@@ -324,77 +319,6 @@ document (|
           ** ccc の子2
       }
     >
-
-    % +block-frame<
-    %   +listing{
-    %     * aaa
-    %     * bbb
-    %       \sublist(listing-default-label){
-    %         * bbb の子1
-    %         * bbb の子2
-    %           \sublist(listing-default-label){
-    %             * bbb の子2 の子1
-    %           }
-    %       }
-    %     * ccc
-    %       \sublist(listing-default-label){
-    %         * ccc の子1
-    %         * ccc の子2
-    %       }
-    %   }
-    % >
-    % 
-    % +block-frame<
-    %   +itemize(listing-default-label)<
-    %     +item{aaa}<>
-    %     +item{bbb}<
-    %       +item{bbb の子1}<>
-    %       +item{bbb の子2}<
-    %         +item{bbb の子2 の子1}<>
-    %       >
-    %     >
-    %     +item{ccc}<
-    %       +item{ccc の子1}<>
-    %       +item{ccc の子2}<>
-    %     >
-    %   >
-    % >
-    % 
-    % +block-frame<
-    %   +itemize(listing-default-label)<
-    %     +item{aaa}<>
-    %     +item{bbb}<
-    %       +sublist(listing-default-label){
-    %         * bbb の子1
-    %         * bbb の子2
-    %           ** bbb の子2の子1
-    %       }
-    %     >
-    %     +sublist(listing-default-label){
-    %       * ccc
-    %         ** ccc の子1
-    %         ** ccc の子2
-    %     }
-    %   >
-    % >
-    % 
-    % +block-frame<
-    %   +listing{
-    %     * aaa
-    %     * bbb
-    %       \subitem(listing-default-label)<
-    %         +item{bbb の子1}<>
-    %         +item{bbb の子2}<
-    %           +item{bbb の子2 の子1}<>
-    %         >
-    %       >
-    %     * ccc
-    %       \subitem(listing-default-label)<
-    %         +item{ccc の子1}<>
-    %         +item{ccc の子2}<>
-    %       >
-    %   }
-    % >
 
     +p{
       1つは \SATySFi; の箇条書きを表す専用の構文をそのまま用いてネストを表現する方法。
@@ -565,7 +489,7 @@ document (|
 
   >
 
-  +subsection{2つの記法の混合}<
+  +subsection{2つの記法の併用}<
 
     +p{
       2つの記法は組み合わせて使用することもできます。
@@ -629,6 +553,124 @@ document (|
           }
       }
     ```);
+  >
+>
+
++section{Gallery}<
+
+  +subsection{ラベルの変更}<
+    +p{
+
+    }
+
+    +example(```
+    ```)<
+      +listing?:(bullet){
+        * 水馬、赤いな。ア、イ、ウ、エ、オ。
+          ** 浮藻に小蝦もおよいでる。
+        * 柿の木、栗の木。カ、キ、ク、ケ、コ。
+          ** 啄木鳥こつこつ、枯れけやき。
+        * 大角豆に醋をかけ、サ、シ、ス、セ、ソ。
+          ** その魚淺瀬で刺しました。
+      }
+    >
+
+    +example(```
+    ```)<
+      +listing?:(text-label {一．}){
+        * 水馬、赤いな。ア、イ、ウ、エ、オ。
+          ** 浮藻に小蝦もおよいでる。
+        * 柿の木、栗の木。カ、キ、ク、ケ、コ。
+          ** 啄木鳥こつこつ、枯れけやき。
+        * 大角豆に醋をかけ、サ、シ、ス、セ、ソ。
+          ** その魚淺瀬で刺しました。
+      }
+    >
+
+    +example(```
+    ```)<
+      +listing?:(text-label-with-depth {|一．|二．|三．|}){
+        * 水馬、赤いな。ア、イ、ウ、エ、オ。
+          ** 浮藻に小蝦もおよいでる。
+        * 柿の木、栗の木。カ、キ、ク、ケ、コ。
+          ** 啄木鳥こつこつ、枯れけやき。
+        * 大角豆に醋をかけ、サ、シ、ス、セ、ソ。
+          ** その魚淺瀬で刺しました。
+      }
+    >
+
+    +example(```
+    ```)<
+      +listing?:(
+        let labelf idx = 
+          let it = (idx * idx) |> arabic |> embed-string in
+          {\ #it;.\ }
+        in
+        index-label labelf
+      ){
+        * 水馬、赤いな。ア、イ、ウ、エ、オ。
+          ** 浮藻に小蝦もおよいでる。
+        * 柿の木、栗の木。カ、キ、ク、ケ、コ。
+          ** 啄木鳥こつこつ、枯れけやき。
+        * 大角豆に醋をかけ、サ、シ、ス、セ、ソ。
+          ** その魚淺瀬で刺しました。
+      }
+    >
+
+    +example(```
+    ```)<
+      +listing?:(
+        let labelf idx = 
+          let it = (idx * idx) |> arabic |> embed-string in
+          {\ #it;.\ }
+        in
+        index-label labelf
+      ){
+        * 水馬、赤いな。ア、イ、ウ、エ、オ。
+          ** 浮藻に小蝦もおよいでる。
+        * 柿の木、栗の木。カ、キ、ク、ケ、コ。
+          ** 啄木鳥こつこつ、枯れけやき。
+        * 大角豆に醋をかけ、サ、シ、ス、セ、ソ。
+          ** その魚淺瀬で刺しました。
+      }
+    >
+
+    +example(```
+    ```)<
+      +listing?:(
+        let labelf idx = 
+          let it = (idx * idx) |> arabic |> embed-string in
+          {\ #it;.\ }
+        in
+        with-depth [index-label labelf; text-label {続き：}]
+      ){
+        * 水馬、赤いな。ア、イ、ウ、エ、オ。
+          ** 浮藻に小蝦もおよいでる。
+        * 柿の木、栗の木。カ、キ、ク、ケ、コ。
+          ** 啄木鳥こつこつ、枯れけやき。
+        * 大角豆に醋をかけ、サ、シ、ス、セ、ソ。
+          ** その魚淺瀬で刺しました。
+      }
+    >
+
+
+
+  >
+
+  +subsection{ラベルのユーザ定義}<
+    
+  >
+
+  +subsection{複雑な箇条書き}<
+    +listing{
+      * \cjk{✓}: 0x2713
+      * \cjk{□}: 0x2501
+    }
+
+  >
+
+  +subsection{応用：定義リスト}<
+    
   >
 
 >

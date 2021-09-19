@@ -1,4 +1,5 @@
 @require: base/option-ext
+@require: base/typeset/base
 @require: base/length
 @require: base/tuple
 @import: ./param
@@ -24,6 +25,7 @@ end = struct
 
   let-mutable counter-stack <- []
   let-mutable label-stack <- []
+
   let display-counter () =
     let-rec aux s lst = match lst with
       | [] -> ` `
@@ -47,8 +49,8 @@ end = struct
 
   let get-all-label () =
     let label-with-margin (label, indent) =
-      let (_, h, d) = get-natural-metrics label in
-      inline-graphics indent h d (fun pt -> [ draw-text pt label ])
+      let (wid, h, d) = get-natural-metrics label in
+      inline-graphics wid h d (fun pt -> [ draw-text pt label ])
     in
     !label-stack |> List.reverse |> List.map label-with-margin |> List.fold-left (++) inline-nil
   let get-all-indent () =
@@ -84,9 +86,10 @@ end = struct
     let record = itemfmt ctx !counter-stack in
     let ib-label = record#label in
     let (wid-label, ht-label, dp-label) = get-natural-metrics ib-label in
-    let indent-base = record#indent-base wid-label in
+    let indent = record#indent wid-label in
 
     let bbf ctx =
+      let ctx = record#context-inner ctx in
 
       let () = sublist-stack |> EnumitemParam.discard in
       let ib = read-inline ctx it in
@@ -96,35 +99,32 @@ end = struct
         let (w, h, d) = get-natural-metrics ib in
         match (Length.(w == 0pt && h == 0pt && d == 0pt), record#label-with-empty-body) with
         | (false, _) ->  % 本文がある場合。
-            let () = push-label ib-label indent-base in
-            let indent-start = record#indent-start wid-label in
+            let () = push-label ib-label indent in
             let (ib-label-all, indent-all) = pop-labels () in
             let ib-label-with-skip =
               inline-skip (0pt -' indent-all) ++ ib-label-all
             in
             line-break true true ctx (
-              ib-label-with-skip ++ inline-skip (indent-start -' indent-base) ++ ib ++ inline-fil
+              ib-label-with-skip ++ ib ++ inline-fil
             )
         | (true, LabelDisplay) ->  % 本文がないがかまわずラベルを描画してほしい場合。
             % length != 0pt のときに同じ。 2度書かなくて良い文法がほしい
-            let () = push-label ib-label indent-base in
-            let indent-start = record#indent-start wid-label in
+            let () = push-label ib-label indent in
             let (ib-label-all, indent-all) = pop-labels () in
             let ib-label-with-skip =
               inline-skip (0pt -' indent-all) ++ ib-label-all
             in
             line-break true true ctx (
-              ib-label-with-skip ++ inline-skip (indent-start -' indent-base) ++ ib ++ inline-fil
+              ib-label-with-skip ++ ib ++ inline-fil
             )
         | (true, LabelInherit) ->
-            let () = push-label ib-label indent-base in
+            let () = push-label ib-label indent in
             block-nil
         | (true, LabelIgnore) ->
             block-nil
       in
 
       let bb-inner =
-        let ctx = record#context-inner ctx in
 
         % 事前に起こしておく副作用
         let () = push-counter () in
@@ -150,7 +150,7 @@ end = struct
       let () = reset-labels () in
       bb-body +++ bb-inner
     in
-    block-frame-breakable ctx (indent-base, 0pt, 0pt, 0pt) empty-decoset bbf
+    block-frame-breakable ctx (indent, 0pt, 0pt, 0pt) empty-decoset bbf
 
   let-inline ctx \embed-block bt =
     let ib-block = embed-block-breakable ctx (read-block ctx '<#bt;>) in
@@ -360,6 +360,13 @@ module EnumitemFormatAlias : sig
   val description: (inline-text -> inline-text)?-> inline-text -> context -> int list -> itemconfig
   val description-newline: (inline-text -> inline-text)?-> inline-text -> context -> int list -> itemconfig
 
+% label (versatile)
+  % ラベルとなるインラインテキストを与えて箇条書きを作成する。
+  val text-label : inline-text -> context -> int list -> itemconfig
+  val text-label-with-depth : inline-text list -> context -> int list -> itemconfig
+  val index-label : (int -> inline-text) -> context -> int list -> itemconfig
+  val with-depth : (context -> int list -> itemconfig) list -> context -> int list -> itemconfig
+
 % listing command
   val listing-default-label: context -> int list -> itemconfig
   val enumerate-default-label: context -> int list -> itemconfig
@@ -369,6 +376,7 @@ module EnumitemFormatAlias : sig
   direct \listing  : [(context -> int list -> itemconfig)?; itemize] inline-cmd
   direct \enumerate: [(context -> int list -> itemconfig)?; itemize] inline-cmd
 
+  direct +description: [block-text] block-cmd
   val +ditem: [(inline-text -> inline-text)?; inline-text; inline-text; block-text] block-cmd
 
 end = struct
@@ -376,6 +384,61 @@ end = struct
   open EnumitemFormat
 
   let nofmt = init
+
+% versatile label
+  let id x = x
+
+  let text-label it  ctx _ = (|
+    indent = id;
+    label = (read-inline ctx it);
+    label-with-empty-body = LabelIgnore;
+    margin-top = 0pt;
+    margin-bottom = 0pt;
+    context-inner = id;
+  |)
+
+  let text-label-with-depth itlst  ctx idxlst =
+    let it =
+      let len-cycle = itlst |> List.length in
+      if len-cycle == 0 then
+        {}
+      else
+        itlst |> List.nth (((idxlst |> List.length) - 1) mod len-cycle)
+              |> Option.from {}
+    in
+    (|
+    indent = id;
+    label = (read-inline ctx it);
+    label-with-empty-body = LabelIgnore;
+    margin-top = 0pt;
+    margin-bottom = 0pt;
+    context-inner = id;
+  |)
+
+  let index-label itf  ctx idxlst =
+    let it = match idxlst with
+      | [] -> itf 0
+      | idx :: _ -> itf idx
+    in
+    (|
+    indent = id;
+    label = (read-inline ctx it);
+    label-with-empty-body = LabelIgnore;
+    margin-top = 0pt;
+    margin-bottom = 0pt;
+    context-inner = id;
+  |)
+
+  let with-depth labellst  ctx idxlst =
+    let len-cycle = labellst |> List.length in
+    let label =
+      if len-cycle == 0 then
+        init
+      else
+        labellst |> List.nth (((idxlst |> List.length) - 1) mod len-cycle)
+                 |> Option.from init
+    in
+    label ctx idxlst
 
 % formats
   let enum-format enumeratef =
@@ -422,24 +485,21 @@ end = struct
     in
     (|
       (EnumitemFormat.init ctx idxlst) with
-        indent-base = indentf;
-        indent-start = indentf;
+        indent = indentf;
         label = label;
     |)
 
+  let-inline ctx \hskip wid-ratio =
+    let l = get-font-size ctx *' wid-ratio in
+    inline-skip l
+
   let bullet =
-    let labelf ctx =
-      let l = get-font-size ctx *' 0.5 in
-      inline-skip l ++ EnumitemFormatUtil.shape-bullet ctx
-    in
-    EnumitemFormat.new-unordered labelf
+    text-label
+      {\hskip(0.5);\eval(EnumitemFormatUtil.shape-bullet);}
 
   let white-bullet =
-    let labelf ctx =
-      let l = get-font-size ctx *' 0.5 in
-      inline-skip l ++ EnumitemFormatUtil.shape-white-bullet ctx
-    in
-    EnumitemFormat.new-unordered labelf
+    text-label
+      {\hskip(0.5);\eval(EnumitemFormatUtil.shape-white-bullet);}
 
 % command
 
@@ -491,15 +551,19 @@ end = struct
 
 % description
   let description ?:itf it ctx _ =
+    let fsizer r = get-font-size ctx *' r in
     let itf = itf |> Option.from (fun x -> x) in
-    let indentf wid-label =
-      Length.max (get-font-size ctx *' 2.0) (wid-label +' get-font-size ctx *' 1.0)
+    let indent wid-label =
+      Length.min (get-font-size ctx *' 6.0) wid-label
     in
-    let label = read-inline ctx (itf it) in
+    let label =
+      let ib = read-inline ctx (itf it) in
+      let (wid, _, _) = get-natural-metrics ib in
+      ib ++ inline-skip (Length.max (fsizer 1.0) (fsizer 2.0 -' wid))
+    in
     (|
       (EnumitemFormat.init ctx []) with
-        indent-base = (fun _ -> get-font-size ctx *' 2.0);
-        indent-start = indentf;
+        indent = indent;
         label = label;
     |)
 
@@ -508,11 +572,12 @@ end = struct
     let label = read-inline ctx (itf it) in
     (|
       (EnumitemFormat.init ctx []) with
-        indent-base = (fun _ -> get-font-size ctx *' 2.0);
-        indent-start = (fun _ -> get-font-size ctx *' 2.0);
+        indent = (fun _ -> get-font-size ctx *' 2.0);
         label = label;
         label-with-empty-body = LabelDisplay;
     |)
+
+  let-block +description bt = '< +itemize(nofmt)(bt); >
 
   let-block ctx +ditem ?:itf dt it-dd bt-dd =
     let itf = itf |> Option.from (fun x -> x) in
