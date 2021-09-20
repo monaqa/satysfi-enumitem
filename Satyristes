@@ -3,20 +3,19 @@
 
 (library
   (name "enumitem")
-  (version "2.0.0")
+  (version "3.0.0")
   (sources
-    (
-     (package "enumitem-param.satyh" "./enumitem-param.satyh")
-     (package "enumitem.satyh" "./enumitem.satyh")))
+    ((packageDir "src")
+     ))
   (opam "satysfi-enumitem.opam")
   (dependencies
     (
-     (base ())))
-  (compatibility ((satyrographos "0.0.1"))))
+     (base ())
+     )))
 
 (libraryDoc
   (name "enumitem-doc")
-  (version "2.0.0")
+  (version "3.0.0")
   (workingDirectory "doc")
   (build
     ((satysfi "enumitem.saty" "-o" "enumitem.pdf")))
