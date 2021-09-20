@@ -89,7 +89,7 @@ end = struct
     let indent = record#indent wid-label in
 
     let bbf ctx =
-      let ctx = record#context-inner ctx in
+      let ctx = record#context-body ctx in
 
       let () = sublist-stack |> EnumitemParam.discard in
       let ib = read-inline ctx it in
@@ -363,7 +363,6 @@ module EnumitemFormatAlias : sig
 % label (versatile)
   % ラベルとなるインラインテキストを与えて箇条書きを作成する。
   val text-label : inline-text -> context -> int list -> itemconfig
-  val text-label-with-depth : inline-text list -> context -> int list -> itemconfig
   val index-label : (int -> inline-text) -> context -> int list -> itemconfig
   val with-depth : (context -> int list -> itemconfig) list -> context -> int list -> itemconfig
 
@@ -394,25 +393,7 @@ end = struct
     label-with-empty-body = LabelIgnore;
     margin-top = 0pt;
     margin-bottom = 0pt;
-    context-inner = id;
-  |)
-
-  let text-label-with-depth itlst  ctx idxlst =
-    let it =
-      let len-cycle = itlst |> List.length in
-      if len-cycle == 0 then
-        {}
-      else
-        itlst |> List.nth (((idxlst |> List.length) - 1) mod len-cycle)
-              |> Option.from {}
-    in
-    (|
-    indent = id;
-    label = (read-inline ctx it);
-    label-with-empty-body = LabelIgnore;
-    margin-top = 0pt;
-    margin-bottom = 0pt;
-    context-inner = id;
+    context-body = id;
   |)
 
   let index-label itf  ctx idxlst =
@@ -426,7 +407,7 @@ end = struct
     label-with-empty-body = LabelIgnore;
     margin-top = 0pt;
     margin-bottom = 0pt;
-    context-inner = id;
+    context-body = id;
   |)
 
   let with-depth labellst  ctx idxlst =
@@ -486,7 +467,7 @@ end = struct
     (|
       (EnumitemFormat.init ctx idxlst) with
         indent = indentf;
-        label = label;
+        label = label ++ inline-skip (get-font-size ctx *' 0.5);
     |)
 
   let-inline ctx \hskip wid-ratio =
@@ -569,7 +550,12 @@ end = struct
 
   let description-newline ?:itf it ctx _ =
     let itf = itf |> Option.from (fun x -> x) in
-    let label = read-inline ctx (itf it) in
+    let label =
+      let fsizer r = get-font-size ctx *' r in
+      let ib = read-inline ctx (itf it) in
+      let (wid, _, _) = get-natural-metrics ib in
+      ib ++ inline-skip (Length.max (fsizer 1.0) (fsizer 2.0 -' wid))
+    in
     (|
       (EnumitemFormat.init ctx []) with
         indent = (fun _ -> get-font-size ctx *' 2.0);

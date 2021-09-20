@@ -10,8 +10,6 @@ type labelwithemptybody =
 
 type itemconfig = (|
   % 基準となるインデント量。
-  % 本文の左端から indent だけ右にずらした線を基準線とよび、
-  % ラベルの揃え方や本文のインデント量はこの基準線をもとに設定される。
   indent: length -> length;
 
   % 現在のアイテムのインデックスを与えて、ラベルのインラインボックス列を返す。
@@ -27,7 +25,7 @@ type itemconfig = (|
   margin-bottom: length;
 
   % 中身の context を変換する関数。
-  context-inner: (context -> context);
+  context-body: (context -> context);
 |)
 
 module EnumitemFormat : sig
@@ -44,7 +42,7 @@ module EnumitemFormat : sig
   val new-description : length?-> (inline-text -> inline-text) -> inline-text -> context -> int list -> itemconfig
 
   val set-indent : (context -> length -> length) -> (context -> int list -> itemconfig) -> context -> int list -> itemconfig
-  val set-context-inner : (context -> int list -> context) -> (context -> int list -> itemconfig) -> context -> int list -> itemconfig
+  val set-context-body : (context -> int list -> context) -> (context -> int list -> itemconfig) -> context -> int list -> itemconfig
 
 end = struct
 
@@ -56,7 +54,7 @@ end = struct
     label-with-empty-body = LabelIgnore;
     margin-top = 0pt;
     margin-bottom = 0pt;
-    context-inner = id;
+    context-body = id;
   |)
 
   let init _ _ = default
@@ -68,7 +66,7 @@ end = struct
       label-with-empty-body = LabelIgnore;
       margin-top = 0pt;
       margin-bottom = 0pt;
-      context-inner = id;
+      context-body = id;
     |)
 
   let new-unordered-with-depth labelf  ctx idxlst =
@@ -78,7 +76,7 @@ end = struct
       label-with-empty-body = LabelIgnore;
       margin-top = 0pt;
       margin-bottom = 0pt;
-      context-inner = id;
+      context-body = id;
     |)
 
   let new-ordered labelf  ctx idxlst =
@@ -92,7 +90,7 @@ end = struct
       label-with-empty-body = LabelInherit;
       margin-top = 0pt;
       margin-bottom = 0pt;
-      context-inner = id;
+      context-body = id;
     |)
 
   let new labelf  ctx idxlst =
@@ -102,7 +100,7 @@ end = struct
       label-with-empty-body = LabelIgnore;
       margin-top = 0pt;
       margin-bottom = 0pt;
-      context-inner = id;
+      context-body = id;
     |)
 
   let new-description ?:min-indent itf  it ctx idxlst =
@@ -116,7 +114,7 @@ end = struct
       label-with-empty-body = LabelDisplay;
       margin-top = 0pt;
       margin-bottom = 0pt;
-      context-inner = id;
+      context-body = id;
     |)
 
 % setter
@@ -127,6 +125,6 @@ end = struct
         indent = (indentf ctx);
     |)
 
-  let set-context-inner ctxf fmt  ctx idxlst = (| (fmt ctx idxlst) with context-inner = (fun ctx -> ctxf ctx idxlst); |)
+  let set-context-body ctxf fmt  ctx idxlst = (| (fmt ctx idxlst) with context-body = (fun ctx -> ctxf ctx idxlst); |)
 
 end

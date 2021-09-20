@@ -1,5 +1,6 @@
 @require: stdjabook
 @require: code
+@require: math
 @require: color
 @require: hdecoset
 @require: vdecoset
@@ -52,47 +53,30 @@ let-block +example str bt =
     +block-frame(bt);
   >%
 
-let-block +description bt = '< +itemize(nofmt)(bt); >
-
-let-block +dt dt it-dd =
-  '<
-    +ditem?:(fun it -> {\emph{#it;}}){#dt;}{#it-dd;}<>
-  >
+let-block +dd dt it-dd = '< +ditem?:(fun it -> {\emph{#it;}}){#dt;}{#it-dd;}<> >
 
 let-block +param name type- desc =
-  '< +ditem?:(fun it -> {\emph{#it;}}){#name;}{(#type-;)}< #desc; > >
+  % '< +ditem?:(fun it -> {\emph{#it;}}){#name;}{(#type-;)}< #desc; > >
+  '< +item?:(description-newline ?:(fun it -> {\emph{#it;}}) name){(#type-;)}<#desc;> >
 
-let todo is-checked ctx idxlst =
-  let ib-square =
-    let fs value = (get-font-size ctx) *' value in
-    let fsize = fs 1.0 in
-    let gr-square (x, y) =
-      stroke 0.5pt Color.black (Gr.rectangle (0pt, 0pt) (fs 0.5, fs 0.5 ))
-        |> shift-graphics (x, y +' fs 0.1)
-    in
-    let gr-mark-done (x, y) =
-      stroke 0.5pt Color.black (
-        Gr.poly-line (fs (0.0 -. 0.1), fs 0.45) [(fs 0.15, fs 0.15); (fs 0.75, fs 0.85)])
-          |> shift-graphics (x, y +' fs 0.1)
-    in
-    let gr point =
-      if is-checked then
-        [gr-square point; gr-mark-done point]
-      else
-        [gr-square point]
-    in
-    inline-skip 10pt ++ (inline-graphics fsize fsize 0pt gr)
-  in
-  let indent wid = wid in
-  (|
-    EnumitemFormat.default with
-      indent = indent;
-      label = ib-square
-  |)
+let ooalign ib1 ib2 =
+  let (wid, ht, dp) = get-natural-metrics ib1 in
+  inline-graphics wid ht dp (fun pt -> [draw-text pt ib1; draw-text pt ib2])
+let ib-box ctx =
+  let ctx = ctx |> set-dominant-narrow-script Kana in
+  read-inline ctx (string-unexplode [0x25A1] |> embed-string)
+let ib-checkmark ctx =
+  let ctx = ctx |> set-dominant-narrow-script Kana in
+  read-inline ctx (string-unexplode [0x2713] |> embed-string)
 
-let-block +tdl bt = '< +itemize(todo false)(bt); >
-let-block +todo it = '< +item?:(todo false)(it)<> >
-let-block +done it = '< +item?:(todo true)(it)<> >
+let-inline ctx \mark-todo = ib-box ctx
+let-inline ctx \mark-done = ooalign (ib-box ctx) (ib-checkmark ctx)
+
+let-block +todo-list bt = '< +itemize(text-label {\mark-todo;\ })(bt); >
+let-block +todo it = '< +item?:(text-label {\mark-todo;\ })(it)<> >
+let-block ctx +done it =
+  let ctx = ctx |> set-text-color (Color.gray 0.5) in
+  read-block ctx '< +item?:(text-label {\mark-done;\ })(it)<> >
 
 let-inline \jugem = {
   寿限無，寿限無，五劫のすりきれ，
@@ -146,19 +130,19 @@ document (|
     }
 
     +description<
-      +dt{箇条書き}{
+      +dd{箇条書き}{
         いくつかの単語や文章、段落などを分けて書き並べたリストのこと。
         ここでは本文と独立の段落で組むものを扱う。
       }
-      +dt{項目}{ 箇条書きを構成する要素。 }
-      +dt{ラベル}{
+      +dd{項目}{ 箇条書きを構成する要素。 }
+      +dd{ラベル}{
         箇条書きの開始を表すために先頭につける記号や文字の列。
         番号付きの箇条書きであれば “1.” や “(1)” といった文字列を指す。
       }
-      +dt{番号付き箇条書き}{
+      +dd{番号付き箇条書き}{
         番号や順序のわかる記号を用いてラベルがふられた箇条書き。
       }
-      +dt{番号無し箇条書き}{
+      +dd{番号無し箇条書き}{
         順序のない記号など用いてラベルがふられた箇条書き。
       }
     >
@@ -291,7 +275,7 @@ document (|
   >
 >
 
-+section{`enumitem` の設計思想}<
++section?:(`enumitem-philosophy`){`enumitem` の設計思想}<
   +p{
     `enumitem` v3.0.0 は以下の思想を元に設計されています。
   }
@@ -394,6 +378,19 @@ document (|
     }
 
     +example(```
+      +itemize(listing-default-label)<
+        +item{aaa}<>
+        +item?:(raw-arabic){bbb}<
+          +item{bbb の子1}<>
+          +item{bbb の子2}<
+            +item{bbb の子2 の子1}<>
+          >
+        >
+        +item?:(dot-arabic-rec){ccc}<
+          +item{ccc の子1}<>
+          +item{ccc の子2}<>
+        >
+      >
     ```)<
       +itemize(listing-default-label)<
         +item{aaa}<>
@@ -411,6 +408,19 @@ document (|
     >
 
     +example(```
+      +itemize(listing-default-label)<
+        +item{aaa}<>
+        +item({bbb})?:(raw-arabic)<
+          +item{bbb の子1}<>
+          +item{bbb の子2}<
+            +item{bbb の子2 の子1}<>
+          >
+        >
+        +item({ccc})?:(dot-arabic-rec)<
+          +item{ccc の子1}<>
+          +item{ccc の子2}<>
+        >
+      >
     ```)<
       +itemize(listing-default-label)<
         +item{aaa}<>
@@ -467,25 +477,25 @@ document (|
       >
     >
 
-    +p{
-      これらを応用すれば、定義リストのような箇条書きを実現することもできます。
-    }
-
-    +example(```
-    ```)<
-      +itemize(nofmt)<
-        +item?:(description {定義項目1}){これが定義内容です。}<>
-        +item?:(description {ちょっと長めの定義項目2}){
-          これがちょっと長めの定義内容です。項目だけでなく本文も少しだけ長めです。
-        }<>
-        +item?:(description-newline {だいぶ長いから改行挟んだほうが良い定義項目3}){}<
-          +pn{
-            こちらは改行を挟んでおり、本文も長めです。
-            このように通常の段落を入れることができます。
-          }
-        >
-      >
-    >
+    % +p{
+    %   これらを応用すれば、定義リストのような箇条書きを実現することもできます。
+    % }
+    % 
+    % +example(```
+    % ```)<
+    %   +itemize(nofmt)<
+    %     +item?:(description {定義項目1}){これが定義内容です。}<>
+    %     +item?:(description {ちょっと長めの定義項目2}){
+    %       これがちょっと長めの定義内容です。項目だけでなく本文も少しだけ長めです。
+    %     }<>
+    %     +item?:(description-newline {だいぶ長いから改行挟んだほうが良い定義項目3}){}<
+    %       +pn{
+    %         こちらは改行を挟んでおり、本文も長めです。
+    %         このように通常の段落を入れることができます。
+    %       }
+    %     >
+    %   >
+    % >
 
   >
 
@@ -560,12 +570,47 @@ document (|
 
   +subsection{ラベルの変更}<
     +p{
-
+      `+listing` コマンドを用いて番号無し箇条書きを実現できることは既に見たとおりですが、
+      オプション引数を用いるとラベルを変更することができます。
+      以下の例はラベルに `bullet` 及び `white-bullet` を指定した箇条書きであり、
+      ラベルがそれぞれ黒丸、白丸に置き換わっていることがわかります。
     }
 
     +example(```
+      +listing?:(bullet){
+        * 水馬、赤いな。ア、イ、ウ、エ、オ。
+          ** 浮藻に小蝦もおよいでる。
+      }
+      +listing?:(white-bullet){
+        * 水馬、赤いな。ア、イ、ウ、エ、オ。
+          ** 浮藻に小蝦もおよいでる。
+      }
     ```)<
       +listing?:(bullet){
+        * 水馬、赤いな。ア、イ、ウ、エ、オ。
+          ** 浮藻に小蝦もおよいでる。
+      }
+      +listing?:(white-bullet){
+        * 水馬、赤いな。ア、イ、ウ、エ、オ。
+          ** 浮藻に小蝦もおよいでる。
+      }
+    >
+
+    +p{
+      `+enumerate` コマンドも同様にオプション引数を用いてラベルを変更できます。
+    }
+
+    +example(```
+      +enumerate?:(paren-alph){
+        * 水馬、赤いな。ア、イ、ウ、エ、オ。
+          ** 浮藻に小蝦もおよいでる。
+        * 柿の木、栗の木。カ、キ、ク、ケ、コ。
+          ** 啄木鳥こつこつ、枯れけやき。
+        * 大角豆に醋をかけ、サ、シ、ス、セ、ソ。
+          ** その魚淺瀬で刺しました。
+      }
+    ```)<
+      +enumerate?:(paren-alph){
         * 水馬、赤いな。ア、イ、ウ、エ、オ。
           ** 浮藻に小蝦もおよいでる。
         * 柿の木、栗の木。カ、キ、ク、ケ、コ。
@@ -575,7 +620,27 @@ document (|
       }
     >
 
+    +p{
+      なお、`+listing` と `+enumerate` の違いはオプション引数のデフォルト値のみであるため、
+      上の例で `+listing?:(paren-alph){ ... }` と書いても同じ結果となります。
+      とはいえマークアップ上の視認性から、
+      番号付き箇条書きには原則 `+enumerate` を使用するほうが望ましいでしょう。
+    }
+
+    +p{
+      もう少し自由度高くラベルを設定したい場合もあるでしょう。
+      `text-label` 関数を用いると、任意のインラインテキストをラベルとして取り扱うことができます。
+    }
+
     +example(```
+      +listing?:(text-label {一．}){
+        * 水馬、赤いな。ア、イ、ウ、エ、オ。
+          ** 浮藻に小蝦もおよいでる。
+        * 柿の木、栗の木。カ、キ、ク、ケ、コ。
+          ** 啄木鳥こつこつ、枯れけやき。
+        * 大角豆に醋をかけ、サ、シ、ス、セ、ソ。
+          ** その魚淺瀬で刺しました。
+      }
     ```)<
       +listing?:(text-label {一．}){
         * 水馬、赤いな。ア、イ、ウ、エ、オ。
@@ -587,9 +652,21 @@ document (|
       }
     >
 
+    +p{
+      `index-label` 関数を用いると、自由度の高い番号付き箇条書きを生成することもできます。
+      \SATySFi; の記法に慣れていなければ少し複雑ですが、
+      インデックスの値（整数値）を引数に取ってインラインテキストを返すような関数を与えることで
+      対応するラベルを生成することができます。
+    }
+
     +example(```
-    ```)<
-      +listing?:(text-label-with-depth {|一．|二．|三．|}){
+      +enumerate?:(
+        let labelf idx = 
+          let it = (idx * idx) |> arabic |> embed-string in
+          {\ #it;.\ }
+        in
+        index-label labelf
+      ){
         * 水馬、赤いな。ア、イ、ウ、エ、オ。
           ** 浮藻に小蝦もおよいでる。
         * 柿の木、栗の木。カ、キ、ク、ケ、コ。
@@ -597,11 +674,8 @@ document (|
         * 大角豆に醋をかけ、サ、シ、ス、セ、ソ。
           ** その魚淺瀬で刺しました。
       }
-    >
-
-    +example(```
     ```)<
-      +listing?:(
+      +enumerate?:(
         let labelf idx = 
           let it = (idx * idx) |> arabic |> embed-string in
           {\ #it;.\ }
@@ -617,15 +691,26 @@ document (|
       }
     >
 
+    +p{
+      ここまで見てきた例はいずれもラベルが箇条書きのネストの深さに応じて変化しませんでした。
+      しかし、親の項目には番号付きのラベルを、
+      子の項目には番号無しのラベルを振るケースも珍しくありません。
+      ネストの深さに応じてラベルを変化させたい場合は `with-depth` 関数を用います。
+      `with-depth` 関数はラベルのリストを引数に取り、
+      項目のネストの深さが ${n} である項目はリストの ${n} 番目のラベルを用いて組まれます。
+    }
+
     +example(```
+      +enumerate?:(with-depth [paren-alph; text-label {続き：}]){
+        * 水馬、赤いな。ア、イ、ウ、エ、オ。
+          ** 浮藻に小蝦もおよいでる。
+        * 柿の木、栗の木。カ、キ、ク、ケ、コ。
+          ** 啄木鳥こつこつ、枯れけやき。
+        * 大角豆に醋をかけ、サ、シ、ス、セ、ソ。
+          ** その魚淺瀬で刺しました。
+      }
     ```)<
-      +listing?:(
-        let labelf idx = 
-          let it = (idx * idx) |> arabic |> embed-string in
-          {\ #it;.\ }
-        in
-        index-label labelf
-      ){
+      +enumerate?:(with-depth [paren-alph; text-label {続き：}]){
         * 水馬、赤いな。ア、イ、ウ、エ、オ。
           ** 浮藻に小蝦もおよいでる。
         * 柿の木、栗の木。カ、キ、ク、ケ、コ。
@@ -636,41 +721,352 @@ document (|
     >
 
     +example(```
+      +listing?:({|一．|二．|三．|} |> List.map text-label |> with-depth){
+        * 五十音
+          ** 水馬、赤いな。ア、イ、ウ、エ、オ。
+            *** 浮藻に小蝦もおよいでる。
+          ** 柿の木、栗の木。カ、キ、ク、ケ、コ。
+            *** 啄木鳥こつこつ、枯れけやき。
+          ** 大角豆に醋をかけ、サ、シ、ス、セ、ソ。
+            *** その魚淺瀬で刺しました。
+      }
     ```)<
-      +listing?:(
-        let labelf idx = 
-          let it = (idx * idx) |> arabic |> embed-string in
-          {\ #it;.\ }
-        in
-        with-depth [index-label labelf; text-label {続き：}]
-      ){
-        * 水馬、赤いな。ア、イ、ウ、エ、オ。
-          ** 浮藻に小蝦もおよいでる。
-        * 柿の木、栗の木。カ、キ、ク、ケ、コ。
-          ** 啄木鳥こつこつ、枯れけやき。
-        * 大角豆に醋をかけ、サ、シ、ス、セ、ソ。
-          ** その魚淺瀬で刺しました。
+      +listing?:({|一．|二．|三．|} |> List.map text-label |> with-depth){
+        * 五十音
+          ** 水馬、赤いな。ア、イ、ウ、エ、オ。
+            *** 浮藻に小蝦もおよいでる。
+          ** 柿の木、栗の木。カ、キ、ク、ケ、コ。
+            *** 啄木鳥こつこつ、枯れけやき。
+          ** 大角豆に醋をかけ、サ、シ、ス、セ、ソ。
+            *** その魚淺瀬で刺しました。
       }
     >
 
-
-
-  >
-
-  +subsection{ラベルのユーザ定義}<
-    
   >
 
   +subsection{複雑な箇条書き}<
-    +listing{
-      * \cjk{✓}: 0x2713
-      * \cjk{□}: 0x2501
+
+    +p{
+      第 \ref(`enumitem-philosophy`); 章で述べたとおり、
+      複雑な箇条書きは `+listing` などの糖衣構文を用いるコマンドで表現しきれない場合があります。
+      そのような場合は `+itemize` コマンドを用います。
     }
+
+    +example(```
+      +itemize(dot-arabic)<
+        +item{ここはアラビア数字で番号付けされている。}<>
+        +item{1番目の必須引数に書いたものが項目となる。}<
+          +item{ネストさせることも可能。}<>
+          +item{2番目の必須引数に書いたものが子項目となる。}<>
+        >
+        +item?:(paren-roman){ここはローマ数字。}<
+          +item{1つ目の必須引数の前を変えると、その項目のラベルのみ変わる。}<>
+          +item{したがって、子の項目はローマ数字にならず、アラビア数字のまま。}<>
+        >
+        +item?:(paren-alph)({ここはアルファベット。})?:(bracket-arabic)<
+          +item{1つ目の必須引数の前を変えると、子の項目のラベルが変わる。}<>
+          +item{今回の場合、ネストの中身は角括弧で囲まれたアラビア数字となる。}<
+            +item{中身も角括弧で囲まれたアラビア数字。}<>
+          >
+        >
+        +item{ここはアラビア数字。}<>
+      >
+    ```)<
+      +itemize(dot-arabic)<
+        +item{ここはアラビア数字で番号付けされている。}<>
+        +item{1番目の必須引数に書いたものが項目となる。}<
+          +item{ネストさせることも可能。}<>
+          +item{2番目の必須引数に書いたものが子項目となる。}<>
+        >
+        +item?:(paren-roman){ここはローマ数字。}<
+          +item{1つ目の必須引数の前を変えると、その項目のラベルのみ変わる。}<>
+          +item{したがって、子の項目はローマ数字にならず、アラビア数字のまま。}<>
+        >
+        +item?:(paren-alph)({ここはアルファベット。})?:(bracket-arabic)<
+          +item{1つ目の必須引数の前を変えると、子の項目のラベルが変わる。}<>
+          +item{今回の場合、ネストの中身は角括弧で囲まれたアラビア数字となる。}<
+            +item{中身も角括弧で囲まれたアラビア数字。}<>
+          >
+        >
+        +item{ここはアラビア数字。}<>
+      >
+    >
+
+    +p{
+      項目の中に複数の段落を入れたいときにも `+itemize` と `+item` の組み合わせは有用です。
+    }
+
+    +example(```
+        +item{
+          一つの項目に複数の段落を入れる例。
+          `+item` の1番目の必須引数に入力されたものが段落となる。
+        }<
+          +p{
+            しかし、2番目の必須引数に `+p` コマンドなど通常のコマンドを入れると、
+            段落をはじめとしたブロックを後続させることができる。
+          }
+          +p{
+            段落は当然複数置くことができる。
+          }
+        >
+
+        +item{
+          別行立て数式を配置する例。
+        }<
+          +math(${y = a});
+
+          +p{
+            インラインテキスト内で別行立て数式を配置するコマンドも存在するが、
+            マークアップの意味合いは若干異なり、こちらは改段落が行われる。
+          }
+        >
+      >
+    ```)<
+      +itemize(bullet)<
+        +item{
+          一つの項目に複数の段落を入れる例。
+          `+item` の1番目の必須引数に入力されたものが段落となる。
+        }<
+          +p{
+            しかし、2番目の必須引数に `+p` コマンドなど通常のコマンドを入れると、
+            段落をはじめとしたブロックを後続させることができる。
+          }
+          +p{
+            段落は当然複数置くことができる。
+          }
+        >
+
+        +item{
+          別行立て数式を配置する例。
+        }<
+          +math(${y = a});
+
+          +p{
+            インラインテキスト内で別行立て数式を配置するコマンドも存在するが、
+            マークアップの意味合いは若干異なり、こちらは改段落が行われる。
+          }
+        >
+      >
+    >
+
+    +p{
+      場合によっては、 `\sublist` などを用いることで
+      糖衣構文ベースで複雑な箇条書きを実現できるケースもあります。
+    }
+
+    +example(```
+      +listing{
+        * 番号付き箇条書きと番号なし箇条書きの混用。
+          ** ここは番号無し箇条書き。
+            \sublist(bullet){
+            * ここは番号なし箇条書き。
+            * ここは番号なし箇条書き。
+            * ここは番号なし箇条書き。
+          }
+          ** ここは番号付き箇条書き。
+            \sublist(dot-arabic){
+            * ここは番号付き箇条書き。
+            * ここは番号付き箇条書き。
+            * ここは番号付き箇条書き。
+          }
+      }
+    ```)<
+      +listing{
+        * 番号付き箇条書きと番号なし箇条書きの混用。
+          ** ここは番号無し箇条書き。
+            \sublist(bullet){
+            * ここは番号なし箇条書き。
+            * ここは番号なし箇条書き。
+            * ここは番号なし箇条書き。
+          }
+          ** ここは番号付き箇条書き。
+            \sublist(dot-arabic){
+            * ここは番号付き箇条書き。
+            * ここは番号付き箇条書き。
+            * ここは番号付き箇条書き。
+          }
+      }
+    >
+
+  >
+
+  +subsection{応用：To Do リスト}<
+
+    +p{
+      `enumitem` を用いて To Do リストを実現することもできます。
+      こちらは少し前準備が必要となります。まずはプリアンブル（トップレベル）にて以下のコマンドを定義します。
+    }
+
+    +code(```
+    let ooalign ib1 ib2 =
+      let (wid, ht, dp) = get-natural-metrics ib1 in
+      inline-graphics wid ht dp (fun pt -> [draw-text pt ib1; draw-text pt ib2])
+    let ib-box ctx =
+      let ctx = ctx |> set-dominant-narrow-script Kana in
+      read-inline ctx (string-unexplode [0x2713] |> embed-string)
+    let ib-checkmark ctx =
+      let ctx = ctx |> set-dominant-narrow-script Kana in
+      read-inline ctx (string-unexplode [0x2501] |> embed-string)
+
+    let-inline ctx \mark-todo = ib-box ctx
+    let-inline ctx \mark-done = ooalign (ib-box ctx) (ib-checkmark ctx)
+    ```);
+
+    +p{
+      `\mark-todo;` は未完了タスクを表すラベル「\mark-todo;」を、
+      `\mark-done;` は完了タスクを表すラベル「\mark-done;」を表しています。
+      上では用意されているフォントのグリフを重ね打ちするなどして作成したものの、
+      画像ファイルを読み込む、
+      \SATySFi; のグラフィックス機能を用いて描画する、といった手法でラベルを用意することも可能です。
+    }
+
+    +p{続いて、以下のように3種類のコマンドを定義します。}
+
+    +code(```
+    let-block +todo-list bt = '< +itemize(text-label {\mark-todo;\ })(bt); >
+    let-block +todo it = '< +item?:(text-label {\mark-todo;\ })(it)<> >
+    let-block ctx +done it =
+      let ctx = ctx |> set-text-color (Color.gray 0.5) in
+      read-block ctx '< +item?:(text-label {\mark-done;\ })(it)<> >
+    ```);
+
+    +p{
+      これらのコマンドを用いて、以下のように To Do リストを組むことができます。
+    }
+
+
+    +example(```
+      +todo-list<
+        +todo{ミルクを買う。}
+        +todo{The \SATySFi;book を読む。}
+        +done{\SATySFi; を完全に理解する。}
+        +todo{課題を解く。}
+      >
+    ```)<
+      +todo-list<
+        +todo{ミルクを買う。}
+        +todo{The \SATySFi;book を読む。}
+        +done{\SATySFi; を完全に理解する。}
+        +todo{課題を解く。}
+      >
+    >
 
   >
 
   +subsection{応用：定義リスト}<
-    
+    +p{
+      定義リストは箇条書きの中でも比較的複雑であり、ラベルに相当する部分にその項目が説明する用語名が入ります。
+      つまり項目ごとにラベルの内容が変化する箇条書きと表現することもできます。
+      幸い、今まで見たとおり `enumitem` パッケージにはそういった複雑な箇条書きを表現するだけの十分な機能が備わっています。
+    }
+
+    +p{
+      最も単純な定義リストは以下のようなものです。
+    }
+
+    +example(```
+      +description<
+        +ditem{用語1}{ここに用語1の説明が入る。}< >
+        +ditem{用語2}{
+          ここに用語2の説明が入る。用語2の説明は少し長い。
+          用語2の説明は少し長い。用語2の説明は少し長い。用語2の説明は少し長い。
+        }< >
+        +ditem{ちょっと長めの用語3}{
+          ここに用語3の説明が入る。用語3の説明は少し長い。
+          用語3の説明は少し長い。用語3の説明は少し長い。用語3の説明は少し長い。
+        }<
+          +pn{
+          複数行にまたがる説明を入れることもできる。
+          }
+        >
+      >
+    ```)<
+      +description<
+        +ditem{用語1}{ここに用語1の説明が入る。}< >
+        +ditem{用語2}{
+          ここに用語2の説明が入る。用語2の説明は少し長い。
+          用語2の説明は少し長い。用語2の説明は少し長い。用語2の説明は少し長い。
+        }< >
+        +ditem{ちょっと長めの用語3}{
+          ここに用語3の説明が入る。用語3の説明は少し長い。
+          用語3の説明は少し長い。用語3の説明は少し長い。用語3の説明は少し長い。
+        }<
+          +pn{
+          複数の段落にまたがる説明を入れることもできる。
+          }
+        >
+      >
+    >
+
+    +p{
+      `+ditem` は `+item` と似ているものの、追加で1番目にインラインテキストの必須引数を取り、
+      そこに書かれたテキストをラベルの名前として表記することができます。
+    }
+
+    +p{
+      ラベルを太字にするなどして強調表示したいことはよくあります。
+      `+ditem` のオプション引数で強調を表現することができます。
+    }
+
+    +example(```
+      +description<
+        +ditem?:(fun it -> {\emph{#it;}}){用語1}{ここに用語1の説明が入る。}< >
+        +ditem?:(fun it -> {\emph{#it;}}){ちょっと長めの用語3}{
+          ここに用語3の説明が入る。用語3の説明は少し長い。
+          用語3の説明は少し長い。用語3の説明は少し長い。用語3の説明は少し長い。
+        }< >
+      >
+    ```)<
+      +description<
+        +ditem?:(fun it -> {\emph{#it;}}){用語1}{ここに用語1の説明が入る。}< >
+        +ditem?:(fun it -> {\emph{#it;}}){ちょっと長めの用語3}{
+          ここに用語3の説明が入る。用語3の説明は少し長い。
+          用語3の説明は少し長い。用語3の説明は少し長い。用語3の説明は少し長い。
+        }< >
+      >
+    >
+
+    +p{
+      実際に用いる場合は、以下のようにプリアンブルでコマンドを定義しておくのが楽です。
+      もし複数段落にまたがる説明を書く予定がないときは、
+      以下のようなコマンドを定義しておけば十分でしょう。
+    }
+
+    +code(```
+    let-block +dd dt it-dd = '< +ditem?:(fun it -> {\emph{#it;}}){#dt;}{#it-dd;}<> >
+    ```);
+
+    +p{
+      上のように定義された `+dd` コマンドを用いれば、
+      `+ditem` をそのまま用いるよりも楽に定義リストを記述できます。
+    }
+
+    +example(```
+      +description<
+        +dd{用語1}{ここに用語1の説明が入る。}
+        +dd{用語2}{
+          ここに用語2の説明が入る。用語2の説明は少し長い。
+          用語2の説明は少し長い。用語2の説明は少し長い。用語2の説明は少し長い。
+        }
+        +dd{ちょっと長めの用語3}{
+          ここに用語3の説明が入る。用語3の説明は少し長い。
+          用語3の説明は少し長い。用語3の説明は少し長い。用語3の説明は少し長い。
+        }
+      >
+    ```)<
+      +description<
+        +dd{用語1}{ここに用語1の説明が入る。}
+        +dd{用語2}{
+          ここに用語2の説明が入る。用語2の説明は少し長い。
+          用語2の説明は少し長い。用語2の説明は少し長い。用語2の説明は少し長い。
+        }
+        +dd{ちょっと長めの用語3}{
+          ここに用語3の説明が入る。用語3の説明は少し長い。
+          用語3の説明は少し長い。用語3の説明は少し長い。用語3の説明は少し長い。
+        }
+      >
+    >
+
   >
 
 >
@@ -696,7 +1092,7 @@ document (|
     +description<
 
       +param{itemfmt-self}{`itemfmt`、オプション}<
-        +p{
+        +pn{
           自分自身の項目の体裁。
           省略した場合は、自身の親で設定されたフォーマットが用いられる。
           あくまで自分自身の項目のみに影響があり、後述の通り、自身の子要素には反映されない。
@@ -704,7 +1100,7 @@ document (|
       >
 
       +param{text-body}{`inline-text`、必須}<
-        +p{
+        +pn{
           自分自身の項目の本文。ラベルは本文の左端に付く。
           空のインラインテキストを指定することもできる。
           その場合はフォーマットの `display-label-with-empty-body` オプションによってラベルが付くかどうか変化する。
@@ -712,36 +1108,78 @@ document (|
       >
 
       +param{itemfmt-child}{`itemfmt`、オプション}<
-        +p{
+        +pn{
           子要素の項目の体裁のデフォルト値。省略した場合、
           子要素は自身の親で設定されたフォーマットを引き継ぐ（`itemfmt-self` の値は用いられない）。
         }
       >
 
     >
-
   >
 
   +subsection{`itemfmt` 型}<
 
     +p{
-      `itemfmt` 型は `enumitem` パッケージに欠かせない型です。
+      `itemfmt` 型は `enumitem` パッケージで定義されている最も重要な型であり、
+      箇条書きの体裁の全てを決定づけるものです。
+      `itemfmt` 型は `context -> int list -> itemconfig` 型のエイリアスであり、
+      現在のテキスト処理文脈と、対象となる項目のインデックスの列を与えたときに
+      ラベルの体裁やインデント量といった設定値をまとめたレコードを返すような関数です。
+      `itemconfig` は以下のフィールドを持つレコードとなっています。
     }
-    
-  >
 
-  +itemize(dot-arabic-rec)<
-    +item{}<
-      +p{foo}
-      +item{bar}< >
+    +description<
+
+      +param{indent}{`length -> length`}<
+        +pn{
+          基準となるインデント量を与える関数。より具体的には、
+          「`label` フィールドの値で決定されるラベルのボックスの横幅を与え、インデント量を返す関数」。
+          項目は先頭の行を除き、全てここで決定される長さだけインデントされる。
+        }
+      >
+
+      +param{label}{`inline-boxes`}<
+        +pn{
+          ラベルを表すインラインボックス列。
+        }
+      >
+
+      +param{label-with-empty-body}{`labelwithemptybody`}<
+        +pn{
+          項目の中身（項目の直後に続くインラインテキスト）が空だったとき、その項目をどのように描くか。
+          `labelwithemptybody` は以下の3つの定数ヴァリアントからなる代数的データ型である。
+        }
+
+        +dd{LabelDisplay}{テキストが空でも構わずにラベルを描画する。}
+        +dd{LabelInherit}{自身はラベルを描画せず、自身の空でない子項目があればそこで一緒に描画させてもらう。}
+        +dd{LabelIgnore}{ラベルを描かず、継承もしない。}
+      >
+
+      +param{margin-top}{`length`}<
+        +pn{
+          箇条書きの段落の上に追加であける余白。ただし、
+          \SATySFi; 標準の機能で設けられる段落間空白はこれと独立に挿入される。
+        }
+      >
+
+      +param{margin-bottom}{`length`}<
+        +pn{
+          箇条書きの段落の下に追加であける余白。ただし、
+          \SATySFi; 標準の機能で設けられる段落間空白はこれと独立に挿入される。
+        }
+      >
+
+      +param{context-body}{`context`}<
+        +pn{
+          テキスト処理文脈。
+          ラベル以外の全ての本文が与えられた関数によって変換される。
+        }
+      >
+
     >
-  >
 
-  +tdl<
-    +todo{あああああ}
-    +todo{あああああ}
-    +done{あああああ}
-    +todo{あああああ}
+
+
   >
 
 >
