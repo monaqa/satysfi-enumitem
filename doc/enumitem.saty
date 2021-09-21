@@ -45,7 +45,7 @@ let-block +code code =
 
 let-block ctx +block-frame bt = 
   let decoset = VDecoSet.simple-frame 0.5pt Color.black Color.white in
-  block-frame-breakable ctx (5pt, 5pt, 10pt, 10pt) decoset (fun ctx -> read-block ctx bt)
+  block-frame-breakable ctx (7pt, 7pt, 10pt, 10pt) decoset (fun ctx -> read-block ctx bt)
 
 let-block +example str bt =
   '<%
@@ -907,7 +907,6 @@ document (|
 
     +p{
       ここで示した2つのコードは、どちらも最終的には同様の結果となることに注意してください。
-      実は1番目の糖衣構文ベースの記法は、まず内部でブロックベースの記法へと展開されてから処理されます。
     }
 
   >
@@ -1081,14 +1080,14 @@ document (|
       +listing{
         * aaa
         * bbb
-          \subitem(listing-default-label)<
+          \subitem<
             +item{bbb の子1}<>
             +item{bbb の子2}<
               +item{bbb の子2 の子1}<>
             >
           >
         * ccc
-          \subitem(listing-default-label)<
+          \subitem<
             +item{ccc の子1}<>
             +item{ccc の子2}<>
           >
@@ -1118,6 +1117,91 @@ document (|
       }
     ```);
   >
+
+  +subsection{`enumitem` パッケージにおける箇条書きの等価性}<
+
+    +p{
+      `enumitem` パッケージには様々なコマンドが定義されていますが、
+      実はほぼ全てのコマンドは `+item` というコマンドのみを用いて等価に書き表すことができます。
+    }
+
+    +p{
+      たとえば `+item` コマンドを用いる全ての箇条書きは全て `+itemize` コマンドで囲むことになっていますが、
+      実はこの `+itemize` も `+item` の一種にすぎません。
+      実際、以下の2つのコードは等価です：
+    }
+
+    +code(```
+    +itemize(bullet)<
+      +item{foo bar}<>
+    >
+    ```);
+
+    +code(```
+    +item?:(EnumitemFormat.init)({})?:(bullet)<
+      +item{foo bar}<>
+    >
+    ```);
+
+    +p{
+      また、 `+listing` を用いたコードも、
+      実は内部で再帰的に `+item` を用いたインラインテキストへ書き換えるような実装となっています。
+    }
+
+    +code(```
+    +listing?:(bullet){
+      * foo
+        ** foo1
+        ** foo2
+      * bar
+    }
+    ```);
+
+    +code(```
+    +item?:(EnumitemFormat.init)({})?:(bullet)<
+      +item{foo}<
+        +item{foo1}<>
+        +item{foo2}<>
+      >
+      +item{bar}<>
+    >
+    ```);
+
+    +p{
+      更に、インラインテキストの中に子構造を記述できる `\sublist` などのコマンドも、
+      最終的には `+item` を用いた木構造のコードへと（ほぼ）等価になるような実装となっています。
+    }
+
+    +code(```
+    +listing?:(bullet){
+      * foo
+        \sublist(dot-arabic){
+          * foo1
+          * foo2
+        }
+      * bar
+        \subitem<
+          +item{bar1}<>
+          +item{bar2}<>
+        >
+    }
+    ```);
+
+    +code(```
+    +item?:(EnumitemFormat.init)({})?:(bullet)<
+      +item{foo}<
+        +item?:(dot-arabic){foo1}<>
+        +item?:(dot-arabic){foo2}<>
+      >
+      +item{bar}<
+        +item{bar1}<>
+        +item{bar2}<>
+      >
+    >
+    ```);
+
+  >
+
 >
 
 
@@ -1127,44 +1211,53 @@ document (|
 
     +p{
       `Enumitem` モジュールは本パッケージの根幹となるコマンドを定義します。
-      最も大切なのは `+item` コマンドであり、 `Enumitem` パッケージで提供される主要なコマンドは
-      全て `+item` を用いたブロックボックス列に展開されるようになっています。
-    }
-
-    +p{
-      `+item` の引数は以下のようになっています。
+      最も大切なのは `+item` コマンドであり、上で述べたように
+      `Enumitem` パッケージで提供される主要なコマンドは
+      ほとんど `+item` を用いたブロックボックス列に展開される仕組みになっています。
+      `+item` は以下の引数を取ります。
     }
 
     +code(```
     +item?:( itemfmt-self )({ text-body })?:( itemfmt-child )< children >
     ```);
 
-    +description<
+    +p{引数の詳細は以下のとおりです。}
 
-      +param{itemfmt-self}{`itemfmt`、オプション}<
-        +pn{
-          自分自身の項目の体裁。
-          省略した場合は、自身の親で設定されたフォーマットが用いられる。
-          あくまで自分自身の項目のみに影響があり、後述の通り、自身の子要素には反映されない。
-        }
+    +block-frame<
+      +description<
+
+        +param{itemfmt-self}{`itemfmt`、オプション}<
+          +pn{
+            自分自身の項目の体裁。
+            省略した場合は、自身の親で設定されたフォーマットが用いられる。
+            あくまで自分自身の項目のみに影響があり、後述の通り、自身の子要素には反映されない。
+          }
+        >
+
+        +param{text-body}{`inline-text`、必須}<
+          +pn{
+            自分自身の項目の本文。ラベルは本文の左端に付く。
+            空のインラインテキストを指定することもできる。
+            その場合はフォーマットの `display-label-with-empty-body` オプションによってラベルが付くかどうか変化する。
+          }
+        >
+
+        +param{itemfmt-child}{`itemfmt`、オプション}<
+          +pn{
+            子要素の項目の体裁のデフォルト値。省略した場合、
+            子要素は自身の親で設定されたフォーマットを引き継ぐ（`itemfmt-self` の値は用いられない）。
+          }
+        >
+
+        +param{children}{`block-text`、必須}<
+          +pn{
+            子要素の項目。空のブロックテキストを指定することもでき、その場合は `block-nil` と同等の扱いとなる。
+          }
+        >
+
       >
-
-      +param{text-body}{`inline-text`、必須}<
-        +pn{
-          自分自身の項目の本文。ラベルは本文の左端に付く。
-          空のインラインテキストを指定することもできる。
-          その場合はフォーマットの `display-label-with-empty-body` オプションによってラベルが付くかどうか変化する。
-        }
-      >
-
-      +param{itemfmt-child}{`itemfmt`、オプション}<
-        +pn{
-          子要素の項目の体裁のデフォルト値。省略した場合、
-          子要素は自身の親で設定されたフォーマットを引き継ぐ（`itemfmt-self` の値は用いられない）。
-        }
-      >
-
     >
+
   >
 
   +subsection{`itemfmt` 型}<
@@ -1178,54 +1271,62 @@ document (|
       `itemconfig` は以下のフィールドを持つレコードとなっています。
     }
 
-    +description<
+    +block-frame<
+      +description<
 
-      +param{indent}{`length -> length`}<
-        +pn{
-          基準となるインデント量を与える関数。より具体的には、
-          「`label` フィールドの値で決定されるラベルのボックスの横幅を与え、インデント量を返す関数」。
-          項目は先頭の行を除き、全てここで決定される長さだけインデントされる。
-        }
+        +param{indent}{`length -> length`}<
+          +pn{
+            左側のインデント量を与える関数。より具体的には、
+            「`label` フィールドの値で決定されるラベルのボックスの横幅を与え、インデント量を返す関数」。
+            項目の本文は（ラベルの付与される先頭の行を除き）全てここで決定される長さだけインデントされる。
+          }
+        >
+
+        +param{indent-right}{`length`}<
+          +pn{
+            右側のインデント量。
+          }
+        >
+
+        +param{label}{`inline-boxes`}<
+          +pn{
+            ラベルを表すインラインボックス列。
+          }
+        >
+
+        +param{label-with-empty-body}{`labelwithemptybody`}<
+          +pn{
+            項目の中身（項目の直後に続くインラインテキスト）が空だったとき、その項目をどのように描くか。
+            `labelwithemptybody` は以下の3つの定数ヴァリアントからなる代数的データ型である。
+          }
+
+          +dd{LabelDisplay}{テキストが空でも構わずにラベルを描画する。}
+          +dd{LabelInherit}{自身はラベルを描画せず、自身の空でない子項目があればそこで一緒に描画させてもらう。}
+          +dd{LabelIgnore}{ラベルを描かず、継承もしない。}
+        >
+
+        +param{margin-top}{`length`}<
+          +pn{
+            箇条書きの段落の上に追加であける余白。ただし、
+            \SATySFi; 標準の機能で設けられる段落間空白はこれと独立に挿入される。
+          }
+        >
+
+        +param{margin-bottom}{`length`}<
+          +pn{
+            箇条書きの段落の下に追加であける余白。ただし、
+            \SATySFi; 標準の機能で設けられる段落間空白はこれと独立に挿入される。
+          }
+        >
+
+        +param{context-body}{`context`}<
+          +pn{
+            テキスト処理文脈。
+            ラベル以外の全ての本文が与えられた関数によって変換される。
+          }
+        >
+
       >
-
-      +param{label}{`inline-boxes`}<
-        +pn{
-          ラベルを表すインラインボックス列。
-        }
-      >
-
-      +param{label-with-empty-body}{`labelwithemptybody`}<
-        +pn{
-          項目の中身（項目の直後に続くインラインテキスト）が空だったとき、その項目をどのように描くか。
-          `labelwithemptybody` は以下の3つの定数ヴァリアントからなる代数的データ型である。
-        }
-
-        +dd{LabelDisplay}{テキストが空でも構わずにラベルを描画する。}
-        +dd{LabelInherit}{自身はラベルを描画せず、自身の空でない子項目があればそこで一緒に描画させてもらう。}
-        +dd{LabelIgnore}{ラベルを描かず、継承もしない。}
-      >
-
-      +param{margin-top}{`length`}<
-        +pn{
-          箇条書きの段落の上に追加であける余白。ただし、
-          \SATySFi; 標準の機能で設けられる段落間空白はこれと独立に挿入される。
-        }
-      >
-
-      +param{margin-bottom}{`length`}<
-        +pn{
-          箇条書きの段落の下に追加であける余白。ただし、
-          \SATySFi; 標準の機能で設けられる段落間空白はこれと独立に挿入される。
-        }
-      >
-
-      +param{context-body}{`context`}<
-        +pn{
-          テキスト処理文脈。
-          ラベル以外の全ての本文が与えられた関数によって変換される。
-        }
-      >
-
     >
 
   >

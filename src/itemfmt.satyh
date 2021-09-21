@@ -9,8 +9,15 @@ type labelwithemptybody =
   | LabelIgnore   % ラベルを描かず、継承もしない。
 
 type itemconfig = (|
-  % 基準となるインデント量。
+  % 基準となる左側のインデント量。
+  % args:
+  %   label-width (length): ラベルの幅。
+  %
+  % たとえば (fun x -> x) を指定すれば本文のインデントがラベルの右幅に一致する。
   indent: length -> length;
+
+  % 右側のインデント量。
+  indent-right: length;
 
   % 現在のアイテムのインデックスを与えて、ラベルのインラインボックス列を返す。
   label: inline-boxes;
@@ -50,6 +57,7 @@ end = struct
 
   let default = (|
     indent = (fun _ -> 0pt);
+    indent-right = 0pt;
     label = inline-nil;
     label-with-empty-body = LabelIgnore;
     margin-top = 0pt;
@@ -62,6 +70,7 @@ end = struct
   let new-unordered labelf  ctx _ =
     (|
       indent = id;
+      indent-right = 0pt;
       label = labelf ctx;
       label-with-empty-body = LabelIgnore;
       margin-top = 0pt;
@@ -72,6 +81,7 @@ end = struct
   let new-unordered-with-depth labelf  ctx idxlst =
     (|
       indent = id;
+      indent-right = 0pt;
       label = labelf ctx (List.length idxlst);
       label-with-empty-body = LabelIgnore;
       margin-top = 0pt;
@@ -86,6 +96,7 @@ end = struct
     in
     (|
       indent = id;
+      indent-right = 0pt;
       label = label;
       label-with-empty-body = LabelInherit;
       margin-top = 0pt;
@@ -96,6 +107,7 @@ end = struct
   let new labelf  ctx idxlst =
     (|
       indent = id;
+      indent-right = 0pt;
       label = labelf ctx idxlst;
       label-with-empty-body = LabelIgnore;
       margin-top = 0pt;
@@ -110,6 +122,7 @@ end = struct
     in
     (|
       indent = (fun _ -> min-indent);
+      indent-right = 0pt;
       label = read-inline ctx (itf it);
       label-with-empty-body = LabelDisplay;
       margin-top = 0pt;
@@ -123,6 +136,7 @@ end = struct
     (|
       (fmt ctx idxlst) with
         indent = (indentf ctx);
+        indent-right = 0pt;
     |)
 
   let set-context-body ctxf fmt  ctx idxlst = (| (fmt ctx idxlst) with context-body = (fun ctx -> ctxf ctx idxlst); |)

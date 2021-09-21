@@ -17,7 +17,7 @@ module Enumitem : sig
   direct \itemize : [context -> int list -> itemconfig; block-text]  inline-cmd
   direct \sublist: [context -> int list -> itemconfig; itemize] inline-cmd
   direct +sublist: [context -> int list -> itemconfig; itemize] block-cmd
-  direct \subitem: [context -> int list -> itemconfig; block-text] inline-cmd
+  direct \subitem: [block-text] inline-cmd
 
   val \embed-block: [block-text] inline-cmd
 
@@ -150,7 +150,7 @@ end = struct
       let () = reset-labels () in
       bb-body +++ bb-inner
     in
-    block-frame-breakable ctx (indent, 0pt, 0pt, 0pt) empty-decoset bbf
+    block-frame-breakable ctx (indent, record#indent-right, 0pt, 0pt) empty-decoset bbf
 
   let-inline ctx \embed-block bt =
     let ib-block = embed-block-breakable ctx (read-block ctx '<#bt;>) in
@@ -180,7 +180,7 @@ end = struct
     children |> List.map (convert-item-to-bt itemfmt)
              |> List.fold-left (fun bt1 bt2 -> '<#bt1;#bt2;>) '<>
 
-  let-inline ctx \subitem itemfmt bt =
+  let-inline ctx \subitem bt =
     let () = sublist-stack |> EnumitemParam.set bt in
     inline-nil
 
@@ -389,6 +389,7 @@ end = struct
 
   let text-label it  ctx _ = (|
     indent = id;
+    indent-right = 0pt;
     label = (read-inline ctx it);
     label-with-empty-body = LabelIgnore;
     margin-top = 0pt;
@@ -403,6 +404,7 @@ end = struct
     in
     (|
     indent = id;
+    indent-right = 0pt;
     label = (read-inline ctx it);
     label-with-empty-body = LabelIgnore;
     margin-top = 0pt;
