@@ -322,7 +322,7 @@ end = struct
 end
 
 
-module EnumitemFormatAlias : sig
+module EnumitemAlias : sig
 
 % default label
   val nofmt : context -> int list -> itemconfig
@@ -358,7 +358,6 @@ module EnumitemFormatAlias : sig
 
 % label (definition list)
   val description: (inline-text -> inline-text)?-> inline-text -> context -> int list -> itemconfig
-  val description-newline: (inline-text -> inline-text)?-> inline-text -> context -> int list -> itemconfig
 
 % label (versatile)
   % ラベルとなるインラインテキストを与えて箇条書きを作成する。
@@ -546,24 +545,25 @@ end = struct
     in
     (|
       (EnumitemFormat.init ctx []) with
-        indent = indent;
-        label = label;
-    |)
-
-  let description-newline ?:itf it ctx _ =
-    let itf = itf |> Option.from (fun x -> x) in
-    let label =
-      let fsizer r = get-font-size ctx *' r in
-      let ib = read-inline ctx (itf it) in
-      let (wid, _, _) = get-natural-metrics ib in
-      ib ++ inline-skip (Length.max (fsizer 1.0) (fsizer 2.0 -' wid))
-    in
-    (|
-      (EnumitemFormat.init ctx []) with
         indent = (fun _ -> get-font-size ctx *' 2.0);
         label = label;
         label-with-empty-body = LabelDisplay;
     |)
+
+  % let description-newline ?:itf it ctx _ =
+  %   let itf = itf |> Option.from (fun x -> x) in
+  %   let label =
+  %     let fsizer r = get-font-size ctx *' r in
+  %     let ib = read-inline ctx (itf it) in
+  %     let (wid, _, _) = get-natural-metrics ib in
+  %     ib ++ inline-skip (Length.max (fsizer 1.0) (fsizer 2.0 -' wid))
+  %   in
+  %   (|
+  %     (EnumitemFormat.init ctx []) with
+  %       indent = (fun _ -> get-font-size ctx *' 2.0);
+  %       label = label;
+  %       label-with-empty-body = LabelDisplay;
+  %   |)
 
   let-block +description bt = '< +itemize(nofmt)(bt); >
 

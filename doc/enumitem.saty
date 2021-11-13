@@ -7,7 +7,7 @@
 @require: base/length
 @import: ../src/enumitem
 
-open EnumitemFormatAlias
+open EnumitemAlias
 
 % custom commands
 
@@ -31,6 +31,7 @@ let-inline ctx \cjk it =
 let font-ratio-latin = 1.
 let font-ratio-cjk = 0.88
 let font-latin-italic = (`Junicode-it`, font-ratio-latin, 0.)
+let font-latin-bold   = (`Junicode-b` , font-ratio-latin, 0.)
 let font-cjk-gothic   = (`ipaexg`    , font-ratio-cjk  , 0.)
 let-inline ctx \emph inner =
   let ctx-bf =
@@ -57,7 +58,7 @@ let-block +dd dt it-dd = '< +ditem?:(fun it -> {\emph{#it;}}){#dt;}{#it-dd;}<> >
 
 let-block +param name type- desc =
   % '< +ditem?:(fun it -> {\emph{#it;}}){#name;}{(#type-;)}< #desc; > >
-  '< +item?:(description-newline ?:(fun it -> {\emph{#it;}}) name){(#type-;)}<#desc;> >
+  '< +item?:(description ?:(fun it -> {\emph{#it;}}) name){(#type-;)}<#desc;> >
 
 let ooalign ib1 ib2 =
   let (wid, ht, dp) = get-natural-metrics ib1 in
@@ -77,6 +78,23 @@ let-block +todo it = '< +item?:(text-label {\mark-todo;\ })(it)<> >
 let-block ctx +done it =
   let ctx = ctx |> set-text-color (Color.gray 0.5) in
   read-block ctx '< +item?:(text-label {\mark-done;\ })(it)<> >
+
+let-inline ctx \textbf it =
+  let ctx =
+    ctx |> set-font Latin          font-latin-bold
+        |> set-font Kana           font-cjk-gothic
+        |> set-font HanIdeographic font-cjk-gothic
+  in
+  read-inline ctx it
+
+let question =
+  let labelf idx =
+    let num = idx |> arabic |> embed-string in
+    {\textbf{設問#num;}.\ }
+  in
+  index-label labelf
+    |> EnumitemFormat.set-label-inherit
+    |> EnumitemFormat.set-indent (fun ctx wid-label -> get-font-size ctx *' 1.0)
 
 let-inline \jugem = {
   寿限無，寿限無，五劫のすりきれ，
@@ -183,7 +201,7 @@ document (|
     ```);
 
     +p{
-      さらに、 `EnumitemFormatAlias` というモジュールも open しておきましょう。
+      さらに、 `EnumitemAlias` というモジュールも open しておきましょう。
       これは enumitem パッケージで定義されているモジュールの一つであり、
       箇条書きの体裁を変更するための関数、定義リスト専用のコマンドなど便利な機能がまとまっています。
       まとめると、文書ファイルの場合は以下のような文言をファイルに書けばよいということになります。
@@ -194,7 +212,7 @@ document (|
     @require: enumitem/enumitem
 
     % プリアンブル（トップレベル宣言）
-    open EnumitemFormatAlias
+    open EnumitemAlias
 
     in % プリアンブルの終わり
 
@@ -822,6 +840,89 @@ document (|
 
   >
 
+  +subsection{ユースケース：大問と小問からなるレポート}<
+
+    +p{
+      ここで、少々現実的な箇条書きを組んでみましょう。
+      以下はとある大学生のレポート課題を切り取ったものです。
+    }
+
+    +example(```
+      +enumerate?:(with-depth [question; paren-arabic; bullet]){
+        * Lebesgue 測度の劣加法性より（中略）、${m(A) = m(B)} が示された。
+        * ** ${B_N = \bigcup_{n=1}^\infty A_n} とおく。（中略）
+          ** 上限の定義より（中略）
+        * ** ${C_0 = 1} は明らかである。 ${C_n} は（中略）
+          ** ${C_n} は ${C_{n-1}} から適当な部分集合を取り除いてできる集合であるから
+             ${C_n \subset C_{n-1}} となり、${\{C_n\}} は減少列である。（中略）
+          ** \subitem<
+               +item{内測度 ${m_{J*}(C)}}<
+                 +pn{
+                   ${C_n} を構成する1つ1つの閉区間の長さは（中略）
+                 }
+                 +pn{
+                   したがって${m_{J*}(C) = 0}。
+                 }
+               >
+               +item{外測度 ${m_{J*}(C)}}<
+                 +pn{
+                   ${C_n} を構成する1つ1つの閉区間の長さは（中略）
+                 }
+                 +pn{
+                   したがって${m_{J*}(C) = 1}。
+                 }
+               >
+               +pn{以上より、${C} は Jordan 非可測集合である。}
+             >
+      }
+    ```)<
+      +enumerate?:(with-depth [question; paren-arabic; bullet]){
+        * Lebesgue 測度の劣加法性より（中略）、${m(A) = m(B)} が示された。
+        * ** ${B_N = \bigcup_{n=1}^\infty A_n} とおく。（中略）
+          ** 上限の定義より（中略）
+        * ** ${C_0 = 1} は明らかである。 ${C_n} は（中略）
+          ** ${C_n} は ${C_{n-1}} から適当な部分集合を取り除いてできる集合であるから
+             ${C_n \subset C_{n-1}} となり、${\{C_n\}} は減少列である。（中略）
+          ** \subitem<
+               +item{内測度 ${m_{J*}(C)}}<
+                 +pn{
+                   ${C_n} を構成する1つ1つの閉区間の長さは（中略）
+                 }
+                 +pn{
+                   したがって${m_{J*}(C) = 0}。
+                 }
+               >
+               +item{外測度 ${m_{J*}(C)}}<
+                 +pn{
+                   ${C_n} を構成する1つ1つの閉区間の長さは（中略）
+                 }
+                 +pn{
+                   したがって${m_{J*}(C) = 1}。
+                 }
+               >
+               +pn{以上より、${C} は Jordan 非可測集合である。}
+             >
+      }
+    >
+
+    +p{
+      ここで、 `question` は以下のようにユーザ定義された関数です。
+    }
+
+    +code(```
+    let question =
+      let labelf idx =
+        let num = idx |> arabic |> embed-string in
+        {\textbf{設問#num;}.\ }
+      in
+      index-label labelf
+        |> EnumitemFormat.set-label-inherit
+        |> EnumitemFormat.set-indent (fun ctx wid-label -> get-font-size ctx *' 1.0)
+    ```);
+
+  >
+
+
 >
 
 +section?:(`enumitem-philosophy`){`enumitem` の設計思想}<
@@ -1279,6 +1380,7 @@ document (|
             左側のインデント量を与える関数。より具体的には、
             「`label` フィールドの値で決定されるラベルのボックスの横幅を与え、インデント量を返す関数」。
             項目の本文は（ラベルの付与される先頭の行を除き）全てここで決定される長さだけインデントされる。
+            たとえば恒等写像 `(fun len -> len)` を与えると、箇条書きの本文はラベルの長さだけインデントされる。
           }
         >
 

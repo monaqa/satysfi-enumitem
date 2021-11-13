@@ -50,6 +50,9 @@ module EnumitemFormat : sig
 
   val set-indent : (context -> length -> length) -> (context -> int list -> itemconfig) -> context -> int list -> itemconfig
   val set-context-body : (context -> int list -> context) -> (context -> int list -> itemconfig) -> context -> int list -> itemconfig
+  val set-label-display: (context -> int list -> itemconfig) -> context -> int list -> itemconfig
+  val set-label-inherit: (context -> int list -> itemconfig) -> context -> int list -> itemconfig
+  val set-label-ignore : (context -> int list -> itemconfig) -> context -> int list -> itemconfig
 
 end = struct
 
@@ -140,5 +143,9 @@ end = struct
     |)
 
   let set-context-body ctxf fmt  ctx idxlst = (| (fmt ctx idxlst) with context-body = (fun ctx -> ctxf ctx idxlst); |)
+
+  let set-label-display fmt  ctx idxlst = (| (fmt ctx idxlst) with label-with-empty-body = LabelDisplay; |)
+  let set-label-inherit fmt  ctx idxlst = (| (fmt ctx idxlst) with label-with-empty-body = LabelInherit; |)
+  let set-label-ignore fmt  ctx idxlst = (| (fmt ctx idxlst) with label-with-empty-body = LabelIgnore; |)
 
 end
