@@ -90,18 +90,17 @@ end = struct
     inline-nil
 
   let-block ctx +with-param param value bt =
-    let tmp = get param in
+    let old-value = get param in
     let () = set value param in
     let bb = read-block ctx bt in
-    let () = set tmp param in
+    let () = set old-value param in
     bb
 
   let-inline ctx \with-param param value it =
-    let tmp = get param in
+    let old-value = get param in
     let () = set value param in
-    let it = read-inline ctx it in
-    let () = set tmp param in
-    it
-
+    let ib = read-inline ctx it in
+    let () = set old-value param in
+    ib
 end
 

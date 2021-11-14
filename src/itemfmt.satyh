@@ -1,0 +1,151 @@
+@require: base/list-ext
+@require: base/length
+@require: base/color-ext
+@require: gr
+
+type labelwithemptybody =
+  | LabelDisplay  % テキストが空でもかまわずラベルを描画する。
+  | LabelInherit  % ラベルは描画せず、自身の子要素があればそこでラベルを一緒に描画してもらう。
+  | LabelIgnore   % ラベルを描かず、継承もしない。
+
+type itemconfig = (|
+  % 基準となる左側のインデント量。
+  % args:
+  %   label-width (length): ラベルの幅。
+  %
+  % たとえば (fun x -> x) を指定すれば本文のインデントがラベルの右幅に一致する。
+  indent: length -> length;
+
+  % 右側のインデント量。
+  indent-right: length;
+
+  % 現在のアイテムのインデックスを与えて、ラベルのインラインボックス列を返す。
+  label: inline-boxes;
+
+  % ラベルに対応するテキストが空のとき、ラベルの描画をどのように行うか。
+  label-with-empty-body: labelwithemptybody;
+
+  % 箇条書きの段落の上に追加であける余白（paragraph-margin による余白はそのまま入る）。
+  margin-top: length;
+
+  % 箇条書きの段落の下に追加であける余白（paragraph-margin による余白はそのまま入る）。
+  margin-bottom: length;
+
+  % 中身の context を変換する関数。
+  context-body: (context -> context);
+|)
+
+module EnumitemFormat : sig
+
+% builder
+  val init : context -> int list -> itemconfig
+  val default : itemconfig
+
+  val new : (context -> int list -> inline-boxes) -> context -> int list -> itemconfig
+
+  val new-unordered : (context -> inline-boxes) -> context -> int list -> itemconfig
+  val new-unordered-with-depth : (context -> int -> inline-boxes) -> context -> int list -> itemconfig
+  val new-ordered : (context -> int -> inline-boxes) -> context -> int list -> itemconfig
+  val new-description : length?-> (inline-text -> inline-text) -> inline-text -> context -> int list -> itemconfig
+
+  val set-indent : (context -> length -> length) -> (context -> int list -> itemconfig) -> context -> int list -> itemconfig
+  val set-context-body : (context -> int list -> context) -> (context -> int list -> itemconfig) -> context -> int list -> itemconfig
+  val set-label-display: (context -> int list -> itemconfig) -> context -> int list -> itemconfig
+  val set-label-inherit: (context -> int list -> itemconfig) -> context -> int list -> itemconfig
+  val set-label-ignore : (context -> int list -> itemconfig) -> context -> int list -> itemconfig
+
+end = struct
+
+  let id x = x
+
+  let default = (|
+    indent = (fun _ -> 0pt);
+    indent-right = 0pt;
+    label = inline-nil;
+    label-with-empty-body = LabelIgnore;
+    margin-top = 0pt;
+    margin-bottom = 0pt;
+    context-body = id;
+  |)
+
+  let init _ _ = default
+
+  let new-unordered labelf  ctx _ =
+    (|
+      indent = id;
+      indent-right = 0pt;
+      label = labelf ctx;
+      label-with-empty-body = LabelIgnore;
+      margin-top = 0pt;
+      margin-bottom = 0pt;
+      context-body = id;
+    |)
+
+  let new-unordered-with-depth labelf  ctx idxlst =
+    (|
+      indent = id;
+      indent-right = 0pt;
+      label = labelf ctx (List.length idxlst);
+      label-with-empty-body = LabelIgnore;
+      margin-top = 0pt;
+      margin-bottom = 0pt;
+      context-body = id;
+    |)
+
+  let new-ordered labelf  ctx idxlst =
+    let label = match idxlst with
+      | [] -> labelf ctx 0
+      | idx :: _ -> labelf ctx idx
+    in
+    (|
+      indent = id;
+      indent-right = 0pt;
+      label = label;
+      label-with-empty-body = LabelInherit;
+      margin-top = 0pt;
+      margin-bottom = 0pt;
+      context-body = id;
+    |)
+
+  let new labelf  ctx idxlst =
+    (|
+      indent = id;
+      indent-right = 0pt;
+      label = labelf ctx idxlst;
+      label-with-empty-body = LabelIgnore;
+      margin-top = 0pt;
+      margin-bottom = 0pt;
+      context-body = id;
+    |)
+
+  let new-description ?:min-indent itf  it ctx idxlst =
+    let min-indent = min-indent |> Option.from (get-font-size ctx *' 2.0) in
+    let indent wid = 
+      Length.max min-indent (wid +' get-font-size ctx *' 1.0)
+    in
+    (|
+      indent = (fun _ -> min-indent);
+      indent-right = 0pt;
+      label = read-inline ctx (itf it);
+      label-with-empty-body = LabelDisplay;
+      margin-top = 0pt;
+      margin-bottom = 0pt;
+      context-body = id;
+    |)
+
+% setter
+
+  let set-indent indentf fmt  ctx idxlst =
+    (|
+      (fmt ctx idxlst) with
+        indent = (indentf ctx);
+        indent-right = 0pt;
+    |)
+
+  let set-context-body ctxf fmt  ctx idxlst = (| (fmt ctx idxlst) with context-body = (fun ctx -> ctxf ctx idxlst); |)
+
+  let set-label-display fmt  ctx idxlst = (| (fmt ctx idxlst) with label-with-empty-body = LabelDisplay; |)
+  let set-label-inherit fmt  ctx idxlst = (| (fmt ctx idxlst) with label-with-empty-body = LabelInherit; |)
+  let set-label-ignore fmt  ctx idxlst = (| (fmt ctx idxlst) with label-with-empty-body = LabelIgnore; |)
+
+end

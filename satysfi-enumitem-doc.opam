@@ -1,6 +1,6 @@
 opam-version: "2.0"
 name: "satysfi-enumitem-doc"
-version: "2.0.0"
+version: "3.0.0"
 synopsis: "A SATySFi package for creating itemized lists"
 description: """A SATySFi package for creating itemized lists."""
 
@@ -12,7 +12,7 @@ bug-reports: "https://github.com/monaqa/satysfi-enumitem/issues"
 dev-repo: "git+https://github.com/monaqa/satysfi-enumitem.git"
 
 depends: [
-  "satysfi" {>= "0.0.4" & < "0.0.5"}
+  "satysfi" {>= "0.0.6" & < "0.0.7"}
   "satyrographos" {>= "0.0.2" & < "0.0.3"}
   "satysfi-dist"
   "satysfi-enumitem" {= "%{version}%"}

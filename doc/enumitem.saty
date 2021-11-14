@@ -1,29 +1,37 @@
 @require: stdjabook
 @require: code
+@require: math
 @require: color
 @require: hdecoset
 @require: vdecoset
-@import: ../enumitem
+@require: base/length
+@import: ../src/enumitem
 
-open Enumitem
+open EnumitemAlias
 
 % custom commands
-let-block ctx +ctx ctxf bt = read-block (ctxf ctx) bt
+
+let-block ctx +ctx ctxflst bt = read-block (ctxflst |> List.fold-left (fun ctx ctxf -> ctxf ctx) ctx) bt
 
 let document record bt = StdJaBook.document record '<%
-  +ctx(fun ctx -> (
+  +ctx[fun ctx -> (
     let fsize = get-font-size ctx in
     ctx |> set-paragraph-margin fsize fsize
         % |> set-font-size 5pt
         |> set-leading (fsize *' 1.6)
         |> set-code-text-command (command \code)
     % ctx
-  ))(bt);
+  )](bt);
   >%
+
+let-inline ctx \cjk it =
+  let ctx = ctx |> set-dominant-narrow-script Kana in
+  read-inline ctx it
 
 let font-ratio-latin = 1.
 let font-ratio-cjk = 0.88
 let font-latin-italic = (`Junicode-it`, font-ratio-latin, 0.)
+let font-latin-bold   = (`Junicode-b` , font-ratio-latin, 0.)
 let font-cjk-gothic   = (`ipaexg`    , font-ratio-cjk  , 0.)
 let-inline ctx \emph inner =
   let ctx-bf =
@@ -33,15 +41,63 @@ let-inline ctx \emph inner =
   in
     read-inline ctx-bf inner
 
+let-block +code code = 
+  '<+ctx[set-font-size 10pt; set-paragraph-margin 6pt 6pt; set-leading 16pt;]<+Code.code(code);>>
+
 let-block ctx +block-frame bt = 
   let decoset = VDecoSet.simple-frame 0.5pt Color.black Color.white in
-  block-frame-breakable ctx (5pt, 5pt, 10pt, 10pt) decoset (fun ctx -> read-block ctx bt)
+  block-frame-breakable ctx (7pt, 7pt, 10pt, 10pt) decoset (fun ctx -> read-block ctx bt)
 
 let-block +example str bt =
   '<%
     +code(str);
     +block-frame(bt);
   >%
+
+let-block +dd dt it-dd = '< +ditem?:(fun it -> {\emph{#it;}}){#dt;}{#it-dd;}<> >
+
+let-block +param name type- desc =
+  % '< +ditem?:(fun it -> {\emph{#it;}}){#name;}{(#type-;)}< #desc; > >
+  '< +item?:(description ?:(fun it -> {\emph{#it;}}) name){(#type-;)}<#desc;> >
+
+let ooalign ib1 ib2 =
+  let (wid, ht, dp) = get-natural-metrics ib1 in
+  inline-graphics wid ht dp (fun pt -> [draw-text pt ib1; draw-text pt ib2])
+let ib-box ctx =
+  let ctx = ctx |> set-dominant-narrow-script Kana in
+  read-inline ctx (string-unexplode [0x25A1] |> embed-string)
+let ib-checkmark ctx =
+  let ctx = ctx |> set-dominant-narrow-script Kana in
+  read-inline ctx (string-unexplode [0x2713] |> embed-string)
+
+let-inline ctx \mark-todo = ib-box ctx
+let-inline ctx \mark-done = ooalign (ib-box ctx) (ib-checkmark ctx)
+
+let-block +todo-list bt = '< +itemize(text-label {\mark-todo;\ })(bt); >
+let-block +todo it = '< +item?:(text-label {\mark-todo;\ })(it)<> >
+let-block ctx +done it =
+  let ctx = ctx |> set-text-color (Color.gray 0.5) in
+  read-block ctx '< +item?:(text-label {\mark-done;\ })(it)<> >
+
+let-block +genin it = '< +item?:(text-label{下人「}){#it;」}<> >
+let-block +rouba it = '< +item?:(text-label{老婆「}){#it;」}<> >
+
+let-inline ctx \textbf it =
+  let ctx =
+    ctx |> set-font Latin          font-latin-bold
+        |> set-font Kana           font-cjk-gothic
+        |> set-font HanIdeographic font-cjk-gothic
+  in
+  read-inline ctx it
+
+let question =
+  let labelf idx =
+    let num = idx |> arabic |> embed-string in
+    {\textbf{設問#num;}.\ }
+  in
+  index-label labelf
+    |> EnumitemFormat.set-label-inherit
+    |> EnumitemFormat.set-indent (fun ctx wid-label -> get-font-size ctx *' 1.0)
 
 let-inline \jugem = {
   寿限無，寿限無，五劫のすりきれ，
@@ -53,101 +109,7 @@ let-inline \jugem = {
   グーリンダイのポンポコピーのポンポコナーの長久命の長助．
 }
 
-
-% custom itemizes
-let tmp-label = EnumitemBase.make-param bullet
-let-inline \label labelf = {\set-item(tmp-label)(labelf);}
-let-block +label-demo item = '<%
-  +xgenlisting(fun idx ctx -> (EnumitemParam.get tmp-label) idx ctx)(default-item)(item);
->%
-
-let square-label is-checked ctx =
-  let fs value = (get-font-size ctx) *' value in
-  let fsize = fs 1.0 in
-  let gr-square (x, y) =
-    stroke 0.5pt Color.black (Gr.rectangle (0pt, 0pt) (fs 0.5, fs 0.5 ))
-      |> shift-graphics (x, y +' fs 0.15)
-  in
-  let gr-mark-done (x, y) =
-    stroke 0.5pt Color.black (
-      Gr.poly-line (fs (0.0 -. 0.1), fs 0.45) [(fs 0.15, fs 0.15); (fs 0.75, fs 0.85)])
-        |> shift-graphics (x, y +' fs 0.15)
-  in
-  let gr point =
-    if is-checked then
-      [gr-square point; gr-mark-done point]
-    else
-      [gr-square point]
-  in
-  inline-skip 10pt ++ (inline-graphics fsize fsize 0pt gr)
-
-let done = EnumitemBase.make-param false
-let-inline \done = {\set-item(done)(true);}
-let-block +todo-list item = '<%
-  +xgenlisting(fun idx ctx -> square-label (EnumitemParam.get done) ctx)(default-item)(item);
->%
-
-let example idxlst ctx =
-  let idx-to-ib idx =
-    (read-inline ctx (embed-string (arabic idx)))
-      ++ (read-inline ctx {.})
-  in
-  idxlst |> List.map idx-to-ib
-         |> List.fold-left (++) inline-nil
-
-let label-toi (idx :: _) ctx =
-  let it-num = embed-string (arabic idx) in
-  read-inline ctx {問#it-num;.\ }
-
-let label-toi-nest idxlst ctx =
-  let str-nums =
-    idxlst |> List.reverse
-           |> List.map (fun idx -> arabic idx ^ `.`)
-           |> List.fold-left (^) ` `
-  in
-  let it-num = embed-string str-nums in
-  read-inline ctx {問#it-num;\ }
-
-let label-japanese-ichi _ ctx = read-inline ctx {一} ++ inline-skip 10pt
-
-let-inline ctx \simple-frame it =
-  let pads = (2pt, 2pt, 2pt, 2pt) in
-  let decos = HDecoSet.simple-frame-stroke 1pt (Color.black) in
-  inline-frame-breakable pads decos (read-inline ctx it)
-
-let framed-Roman (idx :: _) ctx =
-  let label-width = (get-font-size ctx) *' 3.0 in
-  let it-num = Enumitem.to-Roman idx in
-  let ib-label = read-inline ctx {\simple-frame{#it-num;}\ } in
-  let (wid-label, _, _) = get-natural-metrics ib-label in
-  inline-skip (label-width -' wid-label) ++ ib-label
-
-let-block +description item = '<%
-  +gendescription(|
-    desc-config with
-    inner-indent = (fun title-wid -> 30pt);
-    % let ctx-title = ctx |> set-paragraph-margin 12pt 8pt in
-    title-func = (fun ctx title -> read-inline ctx {\emph{#title;}} );
-  |)(item);
->%
-
-let-block +parameters item = '<%
-  +gendescription(|
-    nextline = false;
-    title-inner-gap = 10pt;
-    inner-indent = (fun title-wid -> 30pt);
-    title-func =
-      (fun ctx title -> read-inline ctx {\emph{#title;}} );
-  |)(item);
->%
-
-let paren-arabic-gray idxlst ctx =
-  let ctx2 = ctx |> set-text-color (Color.gray 0.7) in
-  paren-arabic idxlst ctx2
-
-let gray-item ctx =
-  let ctx2 = ctx |> set-text-color (Color.gray 0.7) in
-  default-item ctx2
+let-inline \qf = { The quick brown fox jumps over the lazy dog. }
 
 in
 
@@ -159,36 +121,82 @@ document (|
   show-toc = true;
 |) '<%
 
-  +section{本パッケージの概要}<%
-    +p{
-      Enumitem は，組版システム \SATySFi; において
-      豊富な箇条書きリストや番号付きのリストを出力するためのパッケージです．
-      \SATySFi; には既に itemize というパッケージが標準で用意されていますが，
-      本パッケージではより豊富な機能を提供します（2020年5月23日現在）．
++section{パッケージの概要}<
 
-      具体的には， 本パッケージを使うことで以下のような恩恵を受けられます．
-      \listing{
-        * デフォルトで豊富なスタイルを選択できる
-        * 番号付き箇条書き環境をネストさせることができる\footnote{2020年5月現在，標準ではサポートされていません．}
-        * 定義リストを作成できる
-        * ネストごとに箇条書きのスタイルを変更できる
-        * ユーザ自身がスタイルを容易に拡張できる
+  +p{
+    `enumitem` は \SATySFi; にて豊富な箇条書きや番号付きのリストを提供するパッケージです。
+    標準にもすでに `itemize` という名前のパッケージが用意されているものの、
+    本パッケージではより自由度の高い箇条書きを提供します。
+    具体的には、以下のような箇条書きを書くことができます：
+  }
+  +listing{
+    * デフォルトで豊富なスタイルのラベルを選択できる
+    * 番号付き箇条書き環境をネストさせることができる
+    * ネストごとに箇条書きのスタイルを変更できる
+    * 箇条書きのラベルの体裁を項目ごとに変更できる
+    * 定義リストを作成できる
+    * ユーザ自身がスタイルを拡張できる
+  }
+  +p{
+    本ドキュメントは \SATySFi; v0.0.6 及び `enumitem` パッケージ v3.0.0 の組み合わせでの仕様を述べたものです。
+    旧バージョン、すなわちメジャーバージョンが 0, 1, 2 のいずれかであるものとの互換性は無く、
+    たとえコマンド名が同じであっても引数のルールが異なることなどがあります。
+    バージョンの違いに注意してください。
+  }
+
+  +subsection{用語集}<
+
+    +p{
+      ここでは以下のような用語を用います。
+    }
+
+    +description<
+      +dd{箇条書き}{
+        いくつかの単語や文章、段落などを分けて書き並べたリストのこと。
+        本パッケージではそのうち、本文と独立した段落で組まれるものを扱う。
       }
-    }
-    +p{
-      なお本ドキュメントは，enumitem パッケージ (v2.0.0) の仕様および使い方について述べたものです．
-      本パッケージは v1.x.x から v2.0.0 にバージョンアップする際にほぼ全てのコマンドの仕様を変更しており，
-      v1.x.x を使っている場合はこのドキュメントに書かれている内容では動きません．
-      旧バージョンの enumitem パッケージを用いたい場合は旧版ドキュメントを確認してください．
-    }
-  >%
+      +dd{項目}{
+        箇条書きを構成する1つ1つの要素。1つのラベルと本文で構成され、
+        ネストされた箇条書きの場合は1つ以上の子項目を有する場合がある。
+      }
+      +dd{番号付き箇条書き}{
+        番号や順序のわかる記号を用いてラベルがふられた箇条書き。
+      }
+      +dd{番号無し箇条書き}{
+        順序のない記号などを用いてラベルがふられた箇条書き。
+      }
+      +dd{ラベル}{
+        箇条書きの開始を表すために先頭につける記号や文字の列。
+        通常、番号付き箇条書きであれば “1.” や “(a)”、
+        番号無し箇条書きであれば “\eval(EnumitemFormatUtil.shape-bullet);” といったテキストや記号などが用いられる。
+      }
+    >
 
-  +section{基本的な使い方}<%
+  >
+
+>
+
++section{`enumitem` をはじめよう}<
+
+  +subsection{`enumitem` パッケージのインストール}<
     +p{
-      パッケージを使うには当然ながら読み込みを行う必要があります．
-      \SATySFi; のパッケージマネージャである `Satyrographos` を用いる場合，
-      文書の冒頭に以下の1行を追加するだけで読み込むことができます．
-      以下，常に `enumitem` パッケージが読み込まれているものとして説明を行います．
+      `enumitem` パッケージは Satyrographos によってインストールすることができます。
+    }
+
+    +code(```
+    opam install satysfi-enumitem
+    satyrographos install
+    ```);
+
+    +p{
+      `opam list satysfi-enumitem` などのコマンドで
+      バージョン3系がインストールされていることを確認したら、次に進みましょう。
+    }
+  >
+
+  +subsection{パッケージの読み込み}<
+    +p{
+      \SATySFi; の文書ファイルやヘッダファイルで外部のパッケージを用いるには以下のようにします。
     }
 
     +code(```
@@ -196,9 +204,61 @@ document (|
     ```);
 
     +p{
-      本パッケージは標準のものと同様，
-      `+listing` 及び `+enumerate` という箇条書きインターフェースを提供します．
-      デフォルトでは以下のように箇条書きを書くことができます．
+      さらに、 `EnumitemAlias` というモジュールも open しておきましょう。
+      これは enumitem パッケージで定義されているモジュールの一つであり、
+      箇条書きの体裁を変更するための関数、定義リスト専用のコマンドなど便利な機能がまとまっています。
+      まとめると、文書ファイルの場合は以下のような文言をファイルに書けばよいということになります。
+      「本文」のところは、各クラスファイルの書き方に従ってください。
+    }
+
+    +code(```
+    @require: enumitem/enumitem
+
+    % プリアンブル（トップレベル宣言）
+    open EnumitemAlias
+
+    in % プリアンブルの終わり
+
+    document (| ... |) '< % ここの書き方はクラスファイルに応じて変わる
+      % 本文
+      ...
+    >
+    ```);
+
+    +p{
+      準備ができたら、本文のどこかに以下のように書いてみましょう。
+    }
+    +code(```
+      +listing{
+        * foo
+        * bar
+          ** barfoo
+          ** barbar
+        * baz
+      }
+    ```);
+
+    +p{
+      もし正常にパッケージが読み込まれていれば、以下のように出力されるはずです。
+    }
+
+    +block-frame<
+      +listing{
+        * foo
+        * bar
+          ** barfoo
+          ** barbar
+        * baz
+      }
+    >
+
+  >
+
+  +subsection{基本的なコマンドの使用}<
+    +p{
+      `enumitem` は `+listing` 及び `+enumerate` コマンドを提供します。
+      標準の `itemize` パッケージを使ったことがある人にとっては馴染み深いでしょう。
+      使い方は標準のコマンドと（オプション引数を除き）ほぼ変わりません。
     }
 
     +example(```
@@ -221,6 +281,9 @@ document (|
       }
     >%
 
+    +p{
+      番号付きの箇条書きのネストにも対応しています。
+    }
 
     +example(```
       +enumerate{
@@ -242,1155 +305,1188 @@ document (|
       }
     >%
 
-    +p{
-      このように番号つき箇条書き環境のネストもサポートしており，
-      ネストの深さによってラベルの体裁を変えることができます．
-    }
+  >
+>
 
++section{Gallery}<
+
+  +subsection{ラベルの変更}<
     +p{
-      また，文章の途中で箇条書きをはさむ場合は
-      `\listing` や `\enumerate` コマンドを使うことで改段落を伴わずに箇条書きを挿入できます．
+      `+listing` コマンドを用いて番号無し箇条書きが書けることは既に見たとおりですが、
+      オプション引数を指定することでラベルを自由に変更することができます。
+      以下の例はラベルに `bullet` 及び `white-bullet` を指定した箇条書きであり、
+      ラベルがそれぞれ黒丸、白丸に置き換わっていることがわかります。
     }
 
     +example(```
+      +listing?:(bullet){
+        * 水馬、赤いな。ア、イ、ウ、エ、オ。
+          ** 浮藻に小蝦もおよいでる。
+      }
+      +listing?:(white-bullet){
+        * 水馬、赤いな。ア、イ、ウ、エ、オ。
+          ** 浮藻に小蝦もおよいでる。
+      }
+    ```)<
+      +listing?:(bullet){
+        * 水馬、赤いな。ア、イ、ウ、エ、オ。
+          ** 浮藻に小蝦もおよいでる。
+      }
+      +listing?:(white-bullet){
+        * 水馬、赤いな。ア、イ、ウ、エ、オ。
+          ** 浮藻に小蝦もおよいでる。
+      }
+    >
+
     +p{
-      寿限無，寿限無，五劫のすりきれ，
-      海砂利水魚の
+      `+enumerate` コマンドも同様にオプション引数を用いてラベルを変更できます。
+    }
+
+    +example(```
+      +enumerate?:(paren-alph){
+        * 水馬、赤いな。ア、イ、ウ、エ、オ。
+          ** 浮藻に小蝦もおよいでる。
+        * 柿の木、栗の木。カ、キ、ク、ケ、コ。
+          ** 啄木鳥こつこつ、枯れけやき。
+        * 大角豆に醋をかけ、サ、シ、ス、セ、ソ。
+          ** その魚淺瀬で刺しました。
+      }
+    ```)<
+      +enumerate?:(paren-alph){
+        * 水馬、赤いな。ア、イ、ウ、エ、オ。
+          ** 浮藻に小蝦もおよいでる。
+        * 柿の木、栗の木。カ、キ、ク、ケ、コ。
+          ** 啄木鳥こつこつ、枯れけやき。
+        * 大角豆に醋をかけ、サ、シ、ス、セ、ソ。
+          ** その魚淺瀬で刺しました。
+      }
+    >
+
+    +p{
+      なお、`+listing` と `+enumerate` の違いはオプション引数のデフォルト値のみであるため、
+      上の例で `+listing?:(paren-alph){ ... }` と書いても同じ結果となります。
+      % とはいえマークアップ上の視認性から、
+      % 番号付き箇条書きには原則 `+enumerate` を使用するほうが望ましいでしょう。
+    }
+
+    +p{
+      もう少し自由度高くラベルを設定したい場合もあるでしょう。
+      `text-label` 関数を用いると、任意のインラインテキストをラベルとして取り扱うことができます。
+    }
+
+    +example(```
+      +listing?:(text-label {一．}){
+        * 水馬、赤いな。ア、イ、ウ、エ、オ。
+          ** 浮藻に小蝦もおよいでる。
+        * 柿の木、栗の木。カ、キ、ク、ケ、コ。
+          ** 啄木鳥こつこつ、枯れけやき。
+        * 大角豆に醋をかけ、サ、シ、ス、セ、ソ。
+          ** その魚淺瀬で刺しました。
+      }
+    ```)<
+      +listing?:(text-label {一．}){
+        * 水馬、赤いな。ア、イ、ウ、エ、オ。
+          ** 浮藻に小蝦もおよいでる。
+        * 柿の木、栗の木。カ、キ、ク、ケ、コ。
+          ** 啄木鳥こつこつ、枯れけやき。
+        * 大角豆に醋をかけ、サ、シ、ス、セ、ソ。
+          ** その魚淺瀬で刺しました。
+      }
+    >
+
+    +p{
+      `index-label` 関数を用いると、
+      インデックスの値（整数値）を引数に取ってインラインテキストを返すような関数を与えることで
+      対応するラベルを生成することができます。
+      自由度の高い番号付き箇条書きを生成するしたい場合に便利です。
+    }
+
+    +example(```
+      +enumerate?:(
+        let square-idx idx = 
+          let it = (idx * idx) |> arabic |> embed-string in
+          {\ #it;.\ }
+        in
+        index-label square-idx
+      ){
+        * 水馬、赤いな。ア、イ、ウ、エ、オ。
+          ** 浮藻に小蝦もおよいでる。
+        * 柿の木、栗の木。カ、キ、ク、ケ、コ。
+          ** 啄木鳥こつこつ、枯れけやき。
+        * 大角豆に醋をかけ、サ、シ、ス、セ、ソ。
+          ** その魚淺瀬で刺しました。
+      }
+    ```)<
+      +enumerate?:(
+        let square-idx idx = 
+          let it = (idx * idx) |> arabic |> embed-string in
+          {\ #it;.\ }
+        in
+        index-label square-idx
+      ){
+        * 水馬、赤いな。ア、イ、ウ、エ、オ。
+          ** 浮藻に小蝦もおよいでる。
+        * 柿の木、栗の木。カ、キ、ク、ケ、コ。
+          ** 啄木鳥こつこつ、枯れけやき。
+        * 大角豆に醋をかけ、サ、シ、ス、セ、ソ。
+          ** その魚淺瀬で刺しました。
+      }
+    >
+
+    +p{
+      ここまで見てきた例はいずれもルールが同じネストレベルのインデックスにのみ依存しており、
+      ラベルが箇条書きのネストの深さに応じて変化する、といったことがありませんでした。
+      しかし、親の項目には番号付きのラベルを、
+      子の項目には番号無しのラベルを振る、といったケースも珍しくありません。
+      ネストの深さに応じてラベルを変化させたい場合は `with-depth` 関数を用います。
+      `with-depth` 関数はラベルのリストを引数に取り、
+      項目のネストの深さが ${n} である項目はリストの ${n} 番目のラベルを用いて組まれます。
+    }
+
+    +example(```
+      +enumerate?:(with-depth [paren-alph; text-label {続き：}]){
+        * 水馬、赤いな。ア、イ、ウ、エ、オ。
+          ** 浮藻に小蝦もおよいでる。
+        * 柿の木、栗の木。カ、キ、ク、ケ、コ。
+          ** 啄木鳥こつこつ、枯れけやき。
+        * 大角豆に醋をかけ、サ、シ、ス、セ、ソ。
+          ** その魚淺瀬で刺しました。
+      }
+    ```)<
+      +enumerate?:(with-depth [paren-alph; text-label {続き：}]){
+        * 水馬、赤いな。ア、イ、ウ、エ、オ。
+          ** 浮藻に小蝦もおよいでる。
+        * 柿の木、栗の木。カ、キ、ク、ケ、コ。
+          ** 啄木鳥こつこつ、枯れけやき。
+        * 大角豆に醋をかけ、サ、シ、ス、セ、ソ。
+          ** その魚淺瀬で刺しました。
+      }
+    >
+
+    +example(```
+      +listing?:({|一．|二．|三．|} |> List.map text-label |> with-depth){
+        * 五十音
+          ** 水馬、赤いな。ア、イ、ウ、エ、オ。
+            *** 浮藻に小蝦もおよいでる。
+          ** 柿の木、栗の木。カ、キ、ク、ケ、コ。
+            *** 啄木鳥こつこつ、枯れけやき。
+          ** 大角豆に醋をかけ、サ、シ、ス、セ、ソ。
+            *** その魚淺瀬で刺しました。
+      }
+    ```)<
+      +listing?:({|一．|二．|三．|} |> List.map text-label |> with-depth){
+        * 五十音
+          ** 水馬、赤いな。ア、イ、ウ、エ、オ。
+            *** 浮藻に小蝦もおよいでる。
+          ** 柿の木、栗の木。カ、キ、ク、ケ、コ。
+            *** 啄木鳥こつこつ、枯れけやき。
+          ** 大角豆に醋をかけ、サ、シ、ス、セ、ソ。
+            *** その魚淺瀬で刺しました。
+      }
+    >
+
+  >
+
+  +subsection{複雑な箇条書き}<
+
+    +p{
+      ここまでに挙げた使い方だけでも多くの箇条書きを組むことができますが、
+      より複雑な箇条書きを組みたい場合もあるかもしれません。たとえば
       \listing{
-        * 水行末
-        * 雲来末
-        * 風来末
+        * 1つの箇条書きの途中でラベルのルールを変えたい
+        * 項目の中に複数の段落や別行立て数式などを入れたい
       }
-      食う寝るところに住むところ...
+      といった場合、今までのコマンドでは対応することができません。
+      これらは、 `+itemize` 及び `+item` というコマンドを用いて組むことができます。
     }
-    ```)<%
-      +p{
-        寿限無，寿限無，五劫のすりきれ，
-        海砂利水魚の
-        \listing{
-          * 水行末
-          * 雲来末
-          * 風来末
-        }
-        食う寝るところに住むところ...
-      }
-    >%
+
+    +example(```
+      +itemize(dot-arabic)<
+        +item{`+item` では、1番目の必須引数に書いたものが項目となる。}<
+          +item{ネストさせることも可能。}<>
+          +item{2番目の必須引数に書いたものが子項目となる。}<>
+        >
+        +item{
+          デフォルトでは `+itemize` の必須引数で指定したラベルが用いられる。
+          したがって、ここはアラビア数字で番号付けされている。
+        }<>
+        +item?:(paren-roman){ここはローマ数字での番号付け。}<
+          +item{`+item` の1つ目の必須引数の前でラベルを指定すれば、自身のラベルが変わる。}<>
+          +item{子の項目はローマ数字にならず、アラビア数字のまま。}<>
+        >
+        +item?:(paren-alph)({ここはアルファベットでの番号付け。})?:(bracket-arabic)<
+          +item{
+            `+item` の2つ目の必須引数の前でラベルを指定すれば、
+            子の項目のラベルが全て変わる。
+          }<>
+          +item{今回の場合、ネストの中身は角括弧で囲まれたアラビア数字となる。}<
+            +item{孫項目のラベルも角括弧で囲まれたアラビア数字。}<>
+          >
+        >
+        +item{ここはアラビア数字。}<>
+      >
+    ```)<
+      +itemize(dot-arabic)<
+        +item{`+item` では、1番目の必須引数に書いたものが項目となる。}<
+          +item{ネストさせることも可能。}<>
+          +item{2番目の必須引数に書いたものが子項目となる。}<>
+        >
+        +item{
+          デフォルトでは `+itemize` の必須引数で指定したラベルが用いられる。
+          したがって、ここはアラビア数字で番号付けされている。
+        }<>
+        +item?:(paren-roman){ここはローマ数字での番号付け。}<
+          +item{`+item` の1つ目の必須引数の前でラベルを指定すれば、自身のラベルが変わる。}<>
+          +item{子の項目はローマ数字にならず、アラビア数字のまま。}<>
+        >
+        +item?:(paren-alph)({ここはアルファベットでの番号付け。})?:(bracket-arabic)<
+          +item{
+            `+item` の2つ目の必須引数の前でラベルを指定すれば、
+            子の項目のラベルが全て変わる。
+          }<>
+          +item{今回の場合、ネストの中身は角括弧で囲まれたアラビア数字となる。}<
+            +item{孫項目のラベルも角括弧で囲まれたアラビア数字。}<>
+          >
+        >
+        +item{ここはアラビア数字。}<>
+      >
+    >
 
     +p{
-      ここまでの使用法は標準パッケージで提供されるものと大きく変わりません．
+      項目の中に複数の段落を入れたいときにも `+itemize` と `+item` の組み合わせは有用です。
     }
-  >%
 
-  +section{ラベルの体裁の指定}<%
+    +example(```
+        +item{
+          一つの項目に複数の段落を入れる例。
+          `+item` の1番目の必須引数に入力されたものが段落となる。
+        }<
+          +p{
+            しかし、2番目の必須引数に `+p` コマンドなど通常のコマンドを入れると、
+            段落をはじめとしたブロックを後続させることができる。
+          }
+          +p{
+            段落は当然複数置くことができる。
+          }
+        >
+
+        +item{
+          別行立て数式を配置する例。
+        }<
+          +math(${y = a});
+
+          +p{
+            インラインテキスト内で別行立て数式を配置するコマンドも存在するが、
+            マークアップの意味合いは若干異なり、こちらは改段落が行われる。
+          }
+        >
+      >
+    ```)<
+      +itemize(bullet)<
+        +item{
+          一つの項目に複数の段落を入れる例。
+          `+item` の1番目の必須引数に入力されたものが段落となる。
+        }<
+          +p{
+            しかし、2番目の必須引数に `+p` コマンドなど通常のコマンドを入れると、
+            段落をはじめとしたブロックを後続させることができる。
+          }
+          +p{
+            段落は当然複数置くことができる。
+          }
+        >
+
+        +item{
+          別行立て数式を配置する例。
+        }<
+          +math(${y = a});
+
+          +p{
+            インラインテキスト内で別行立て数式を配置するコマンドも存在するが、
+            マークアップの意味合いは若干異なり、こちらは改段落が行われる。
+          }
+        >
+      >
+    >
+
     +p{
-      本パッケージが提供する `+listing` や `+enumerate` といったコマンドは，
-      箇条書きのラベル（項目の先頭につく数字や記号）の体裁を指定されたものに変更する機能も持っています．
+      `+itemize` 及び `+item` は `+listing` などのコマンドと比較してより冗長な記述を必要とするものの、
+      `+listing` などのコマンドでは表現できない複雑な箇条書きもパワフルに表現できます。
+      詳細は第 \ref(`enumitem-philosophy`); 章も参照。
     }
 
-    +subsection{ `+listing` のオプション引数を用いた指定}<%
-      +p{
-        `+listing` 及び `+enumerate` は以下のように1つのオプション引数を受け付け，
-        ラベルの体裁を指定することができます．
+    +p{
+      なお、場合によっては
+      `+listing` と `\sublist` などのコマンドを組み合わせて
+      複雑な箇条書きを実現できるケースもあります。
+    }
+
+    +example(```
+      +listing{
+        * 番号付き箇条書きと番号なし箇条書きの混用。
+          ** 以下、番号無し箇条書き。
+            \sublist(bullet){
+              * ここは番号なし箇条書き。
+              * ここは番号なし箇条書き。
+              * ここは番号なし箇条書き。
+            }
+          ** 以下、番号付き箇条書き。
+            \sublist(dot-arabic){
+              * ここは番号付き箇条書き。
+              * ここは番号付き箇条書き。
+              * ここは番号付き箇条書き。
+            }
       }
-      +example(```
-      +listing?:(Enumitem.white-bullet){
-        * hoge
-          ** hoge1
-          ** hoge2
-        * fuga
-        * piyo
+    ```)<
+      +listing{
+        * 番号付き箇条書きと番号なし箇条書きの混用。
+          ** 以下、番号無し箇条書き。
+            \sublist(bullet){
+              * ここは番号なし箇条書き。
+              * ここは番号なし箇条書き。
+              * ここは番号なし箇条書き。
+            }
+          ** 以下、番号付き箇条書き。
+            \sublist(dot-arabic){
+              * ここは番号付き箇条書き。
+              * ここは番号付き箇条書き。
+              * ここは番号付き箇条書き。
+            }
       }
-      ```)<%
-        +listing?:(Enumitem.white-bullet){
-          * hoge
-            ** hoge1
-            ** hoge2
-          * fuga
-          * piyo
+    >
+
+  >
+
+  +subsection{応用：To Do リスト}<
+
+    +p{
+      `enumitem` を用いて To Do リストを実現することもできます。
+      こちらは少し前準備が必要となります。まずはプリアンブル（トップレベル）にて以下のコマンドを定義します。
+    }
+
+    +code(```
+    let ooalign ib1 ib2 =
+      let (wid, ht, dp) = get-natural-metrics ib1 in
+      inline-graphics wid ht dp (fun pt -> [draw-text pt ib1; draw-text pt ib2])
+    let ib-box ctx =
+      let ctx = ctx |> set-dominant-narrow-script Kana in
+      read-inline ctx (string-unexplode [0x2713] |> embed-string)
+    let ib-checkmark ctx =
+      let ctx = ctx |> set-dominant-narrow-script Kana in
+      read-inline ctx (string-unexplode [0x2501] |> embed-string)
+
+    let-inline ctx \mark-todo = ib-box ctx
+    let-inline ctx \mark-done = ooalign (ib-box ctx) (ib-checkmark ctx)
+    ```);
+
+    +p{
+      `\mark-todo;` は未完了タスクを表すラベル「\mark-todo;」を、
+      `\mark-done;` は完了タスクを表すラベル「\mark-done;」を表しています。
+      上のコード例では用意されているフォントのグリフを重ね打ちするなどして作成したものの、
+      画像ファイルを読み込む、
+      \SATySFi; のグラフィックス機能を用いて描画する、といった手法でラベルを用意することも可能です。
+    }
+
+    +p{
+      これらのコマンドと `+itemize` や `+item` コマンドを駆使することで、
+      以下のように To Do リストを組むことができます。
+    }
+
+    +example(```
+      +itemize(text-label {\mark-todo;\ })<
+        +item?:(text-label {\mark-todo;\ }){ミルクを買う。}<>
+        +item?:(text-label {\mark-todo;\ }){The \SATySFi;book を読む。}<>
+        +item?:(text-label {\mark-done;\ }){\SATySFi; を完全に理解する。}<>
+        +item?:(text-label {\mark-todo;\ }){課題を解く。}<>
+      >
+    ```)<
+      +itemize(text-label {\mark-todo;\ })<
+        +item?:(text-label {\mark-todo;\ }){ミルクを買う。}<>
+        +item?:(text-label {\mark-todo;\ }){The \SATySFi;book を読む。}<>
+        +item?:(text-label {\mark-done;\ }){\SATySFi; を完全に理解する。}<>
+        +item?:(text-label {\mark-todo;\ }){課題を解く。}<>
+      >
+    >
+
+    +p{
+      とはいえこれはマークアップと呼ぶには少し複雑すぎますね。
+      もう少し楽に書くため、以下のようなコマンドを追加で定義してみましょう。
+      ついでに、完了した項目は灰色となるような工夫を入れてみます。
+    }
+
+    +code(```
+    let-block +todo-list bt = '< +itemize(text-label {\mark-todo;\ })(bt); >
+    let-block +todo it = '< +item?:(text-label {\mark-todo;\ })(it)<> >
+    let-block ctx +done it =
+      let ctx = ctx |> set-text-color (Color.gray 0.5) in
+      read-block ctx '< +item?:(text-label {\mark-done;\ })(it)<> >
+    ```);
+
+    +example(```
+      +todo-list<
+        +todo{ミルクを買う。}
+        +todo{The \SATySFi;book を読む。}
+        +done{\SATySFi; を完全に理解する。}
+        +todo{課題を解く。}
+      >
+    ```)<
+      +todo-list<
+        +todo{ミルクを買う。}
+        +todo{The \SATySFi;book を読む。}
+        +done{\SATySFi; を完全に理解する。}
+        +todo{課題を解く。}
+      >
+    >
+
+  >
+
+  +subsection{応用：定義リスト}<
+    +p{
+      定義リストとはいくつかの用語を並べて説明したり、定義を述べたりする際に用いられる箇条書きです。
+      ラベルには通常その項目が説明する用語名が入り、本文でその説明が書かれる構造となっています。
+      定義リストは箇条書きとしては少し複雑ですが、
+      幸い、今まで見たとおり `enumitem` パッケージにはそういった複雑な箇条書きを表現するだけの十分な機能が備わっています。
+    }
+
+    +p{
+      最も単純な定義リストは以下のようなものです。
+    }
+
+    +example(```
+      +description<
+        +ditem{用語1}{ここに用語1の説明が入る。}<>
+        +ditem{用語2}{
+          ここに用語2の説明が入る。用語2の説明は少し長い。
+          用語2の説明は少し長い。用語2の説明は少し長い。用語2の説明は少し長い。
+        }<>
+        +ditem{ちょっと長めの用語3}{
+          ここに用語3の説明が入る。用語3の説明は少し長い。
+          用語3の説明は少し長い。用語3の説明は少し長い。用語3の説明は少し長い。
+        }<
+          +pn{
+          複数行にまたがる説明を入れることもできる。
+          }
+        >
+      >
+    ```)<
+      +description<
+        +ditem{用語1}{ここに用語1の説明が入る。}<>
+        +ditem{用語2}{
+          ここに用語2の説明が入る。用語2の説明は少し長い。
+          用語2の説明は少し長い。用語2の説明は少し長い。用語2の説明は少し長い。
+        }<>
+        +ditem{ちょっと長めの用語3}{
+          ここに用語3の説明が入る。用語3の説明は少し長い。
+          用語3の説明は少し長い。用語3の説明は少し長い。用語3の説明は少し長い。
+        }<
+          +pn{
+          複数の段落にまたがる説明を入れることもできる。
+          }
+        >
+      >
+    >
+
+    +p{
+      新たに登場した `+ditem` コマンドは `+item` と似ているものの、
+      追加で1番目にインラインテキストの必須引数を取り、
+      そこに書かれたテキストをラベルとして表示します。
+      また、`+ditem` のオプション引数を用いると、ラベル部分の体裁を変更することができます。
+      以下はラベルを強調して視認性を高めた例です。
+    }
+
+    +example(```
+      +description<
+        +ditem?:(fun it -> {\emph{#it;}}){用語1}{ここに用語1の説明が入る。}<>
+        +ditem?:(fun it -> {\emph{#it;}}){ちょっと長めの用語3}{
+          ここに用語3の説明が入る。用語3の説明は少し長い。
+          用語3の説明は少し長い。用語3の説明は少し長い。用語3の説明は少し長い。
+        }<>
+      >
+    ```)<
+      +description<
+        +ditem?:(fun it -> {\emph{#it;}}){用語1}{ここに用語1の説明が入る。}<>
+        +ditem?:(fun it -> {\emph{#it;}}){ちょっと長めの用語3}{
+          ここに用語3の説明が入る。用語3の説明は少し長い。
+          用語3の説明は少し長い。用語3の説明は少し長い。用語3の説明は少し長い。
+        }<>
+      >
+    >
+
+    +p{
+      実際に用いる場合は、以下のようにプリアンブルでコマンドを定義しておくのが楽です。
+      もし複数段落にまたがる説明を書く予定がないときは、
+      以下のようなコマンドを定義しておけば十分でしょう。
+    }
+
+    +code(```
+    let-block +dd dt it-dd = '< +ditem?:(fun it -> {\emph{#it;}}){#dt;}{#it-dd;}<> >
+    ```);
+
+    +p{
+      上のように定義された `+dd` コマンドを用いれば、
+      `+ditem` をそのまま用いるよりも楽に定義リストを記述できます。
+    }
+
+    +example(```
+      +description<
+        +dd{用語1}{ここに用語1の説明が入る。}
+        +dd{用語2}{
+          ここに用語2の説明が入る。用語2の説明は少し長い。
+          用語2の説明は少し長い。用語2の説明は少し長い。用語2の説明は少し長い。
         }
-      >%
-      +example(```
-      +enumerate?:(Enumitem.dot-arabic){
-        * hoge
-          ** hoge1
-          ** hoge2
-        * fuga
-        * piyo
-      ```)<%
-        +enumerate?:(Enumitem.dot-arabic){
-          * hoge
-            ** hoge1
-            ** hoge2
-          * fuga
-          * piyo
+        +dd{ちょっと長めの用語3}{
+          ここに用語3の説明が入る。用語3の説明は少し長い。
+          用語3の説明は少し長い。用語3の説明は少し長い。用語3の説明は少し長い。
         }
-      >%
+      >
+    ```)<
+      +description<
+        +dd{用語1}{ここに用語1の説明が入る。}
+        +dd{用語2}{
+          ここに用語2の説明が入る。用語2の説明は少し長い。
+          用語2の説明は少し長い。用語2の説明は少し長い。用語2の説明は少し長い。
+        }
+        +dd{ちょっと長めの用語3}{
+          ここに用語3の説明が入る。用語3の説明は少し長い。
+          用語3の説明は少し長い。用語3の説明は少し長い。用語3の説明は少し長い。
+        }
+      >
+    >
 
-      +p{
-        上の例における `white-bullet` や `dot-arabic` は
-        `Enumitem` と呼ばれるモジュール内で定義されており， `labelfmt` 型を持ちます．
-        モジュール内で定義されている `labelfmt` 型の値は他にも多数存在し，
-        それらをオプション引数に渡すことで箇条書きを模様替えできるという仕組みです．
+  >
+
+  +subsection{ユースケース：大問と小問からなるレポート}<
+
+    +p{
+      ここで、少々現実的な箇条書きを組んでみましょう。
+      以下はとある大学生のレポート課題を切り取ったものです。
+    }
+
+    +example(```
+      +enumerate?:(with-depth [question; paren-arabic; bullet]){
+        * Lebesgue 測度の劣加法性より（中略）、${m(A) = m(B)} が示された。
+        * ** ${B_N = \bigcup_{n=1}^\infty A_n} とおく。（中略）
+          ** 上限の定義より（中略）
+        * ** ${C_0 = 1} は明らかである。 ${C_n} は（中略）
+          ** ${C_n} は ${C_{n-1}} から適当な部分集合を取り除いてできる集合であるから
+             ${C_n \subset C_{n-1}} となり、${\{C_n\}} は減少列である。（中略）
+          ** \subitem<
+               +item{内測度 ${m_{J*}(C)}}<
+                 +pn{
+                   ${C_n} を構成する1つ1つの閉区間の長さは（中略）
+                 }
+                 +pn{
+                   したがって${m_{J*}(C) = 0}。
+                 }
+               >
+               +item{外測度 ${m_{J*}(C)}}<
+                 +pn{
+                   ${C_n} を構成する1つ1つの閉区間の長さは（中略）
+                 }
+                 +pn{
+                   したがって${m_{J*}(C) = 1}。
+                 }
+               >
+               +pn{以上より、${C} は Jordan 非可測集合である。}
+             >
       }
-
-      +p{
-        なお，実際のマークアップで変数名の前に `Enumitem.`
-        を付けるのは多少面倒と感じられるかもしれません．
-        `Enumitem` モジュールを open すれば，それ以降モジュール名を省略することができます．
+    ```)<
+      +enumerate?:(with-depth [question; paren-arabic; bullet]){
+        * Lebesgue 測度の劣加法性より（中略）、${m(A) = m(B)} が示された。
+        * ** ${B_N = \bigcup_{n=1}^\infty A_n} とおく。（中略）
+          ** 上限の定義より（中略）
+        * ** ${C_0 = 1} は明らかである。 ${C_n} は（中略）
+          ** ${C_n} は ${C_{n-1}} から適当な部分集合を取り除いてできる集合であるから
+             ${C_n \subset C_{n-1}} となり、${\{C_n\}} は減少列である。（中略）
+          ** \subitem<
+               +item{内測度 ${m_{J*}(C)}}<
+                 +pn{
+                   ${C_n} を構成する1つ1つの閉区間の長さは（中略）
+                 }
+                 +pn{
+                   したがって${m_{J*}(C) = 0}。
+                 }
+               >
+               +item{外測度 ${m_{J*}(C)}}<
+                 +pn{
+                   ${C_n} を構成する1つ1つの閉区間の長さは（中略）
+                 }
+                 +pn{
+                   したがって${m_{J*}(C) = 1}。
+                 }
+               >
+               +pn{以上より、${C} は Jordan 非可測集合である。}
+             >
       }
+    >
 
-      +code(```
-      @require: enumitem
-      open Enumitem
+    +p{
+      ここで、 `question` は以下のようにユーザ定義された関数です。
+    }
+
+    +code(```
+    let question =
+      let labelf idx =
+        let num = idx |> arabic |> embed-string in
+        {\textbf{設問#num;}.\ }
       in
-      document(| 中略 |)'<
-        +listing?:(white-bullet){
-          * hoge
-          * fuga
-        }
-      >
-      ```);
+      index-label labelf
+        |> EnumitemFormat.set-label-inherit
+        |> EnumitemFormat.set-indent (fun ctx wid-label -> get-font-size ctx *' 1.0)
+    ```);
 
-      +p{
-        このように書くと， `Enumitem` モジュール内で定義された値や関数の前に
-        `Enumitem.` を付ける必要がなくなります．
-        その代わり，他のパッケージやユーザで定義した関数名と衝突しないようにするのは使用者の責任となります．
-        % 本パッケージでは， `+listing` や `+enumerate` といったコマンドについては名前空間を省略できるようにしていますが，
-        % `raw-arabic` などの関数名は open しない限りモジュール名を省略できないようにしています．
-      }
+  >
 
-      +p{
-        また，箇条書きを書くときにいちいち同じオプション引数を付けるのは面倒だと感じられるかもしれません．
-        その場合は最初に `+listing` のデフォルトの挙動を変更してもよいでしょう．
-        プリアンブル部分に以下のように書くと，
-        以下のコードでは `+listing` を用いた場合は常に白丸がラベルとして使われるようになります．
-      }
 
-      +code(```
-      let-block +listing item = '<
-        +Enumitem.listing?:(Enumitem.white-bullet)(item);
-      >
-      ```);
+>
 
-      % +p{
-      %   なお，もともとの「 `Enumitem` モジュールの `+listing` コマンド」を使いたくなった場合も，
-      %   `+listing` の代わりに `+Enumitem.listing` と表記することで，
-      %   ユーザー定義された `+listing` コマンドと区別することができます．
-      % }
++section?:(`enumitem-philosophy`){`enumitem` の設計思想}<
+  +p{
+    `enumitem` v3.0.0 は以下の思想を元に設計されています。
+  }
+  +listing{
+    * \SATySFi; の文法に備わっている箇条書き用の平易な構文を可能な限り活用する。
+    * 箇条書き用の構文でカバーできない機能については、専用のコマンドで対応する。
+    * 関数を用いてラベルの体裁を指定することで、ユーザによる拡張ができるようにする。
+  }
+  +p{
+    簡潔に書ける箇条書きと自由度の高い箇条書きを両立させるため、
+    `enumitem` パッケージでは箇条書きの木構造を表現する2種類の表現方法が用意されています。
+  }
 
-      +p{
-        余談ですが，`+listing` と `+enumerate` の違いはオプション引数を省略したときのデフォルトの体裁のみであり，
-        オプション引数を設定すると内部での処理は全く同一となります．
-        したがって， `+listing?:(Enumitem.dot-arabic)` のように `+listing` で番号付き箇条書きを書くことも，
-        `+enumerate?:(Enumitem.bullet)` のように `+enumerate` で番号のない箇条書きを書くことも可能ではあります
-        \footnote{もちろん仕組み上そうなっているというだけであり，
-        番号のない箇条書きには `+listing` を，番号付きには `+enumerate` を，などと
-        使い分けたほうが可読性は向上するでしょう．}．
-
-      }
-    >%
-
-    +subsection{ラベルの体裁を定める変数一覧}<%
-      +p{
-        以下は `Enumitem` モジュール内で定義されている体裁指定用変数の一覧です．
-        番号付きの箇条書きを行いたい場合は，以下の変数を使用できます．
-      }
-
-      +label-demo{
-        * アラビア数字系
-
-          ** `raw-arabic` \label(raw-arabic);
-          ** `dot-arabic` \label(dot-arabic);
-          ** `paren-arabic` \label(paren-arabic);
-          ** `bracket-arabic` \label(bracket-arabic);
-
-        * ローマ数字系
-
-          ** `raw-roman` \label(raw-roman);
-          ** `raw-Roman` \label(raw-Roman);
-          ** `dot-roman` \label(dot-roman);
-          ** `dot-Roman` \label(dot-Roman);
-          ** `paren-roman` \label(paren-roman);
-          ** `paren-Roman` \label(paren-Roman);
-          ** `bracket-roman` \label(bracket-roman);
-          ** `bracket-Roman` \label(bracket-Roman);
-
-        * アルファベット系
-
-          ** `raw-alph` \label(raw-alph);
-          ** `raw-Alph` \label(raw-Alph);
-          ** `dot-alph` \label(dot-alph);
-          ** `dot-Alph` \label(dot-Alph);
-          ** `paren-alph` \label(paren-alph);
-          ** `paren-Alph` \label(paren-Alph);
-          ** `bracket-alph` \label(bracket-alph);
-          ** `bracket-Alph` \label(bracket-Alph);
-      }
-
-      +p{
-        また，番号の無い箇条書きには以下の変数を使用できます．
-      }
-
-      +label-demo{
-        * `bullet` \label(bullet);
-        * `white-bullet` \label(white-bullet);
-      }
-    >%
-
-    +subsection{ラベルの体裁をユーザ定義する方法}<%
-      +p{
-        ここまでの説明で，「 `dot-arabic` 等は `labelfmt` 型の関数だ」と述べましたが，
-        そもそも `labelfmt` 型とは何でしょうか．
-        実は `labelfmt` 型とは `int list -> context -> inline-boxes` という型のシノニムであり，
-        \listing{
-          * 箇条書きのラベルのリスト (`int list`)
-          * 現在の本文のテキスト処理文脈 (`context`)
-        }
-        を入力として，
-        箇条書きのラベルを描画するインラインボックス列 (`inline-boxes`) を返す関数を表します．
-        これは必ずしも予めモジュール内で用意された関数である必要はありません．
-        つまり，`labelfmt` 型を持つ関数を自作して `+listing` コマンドのオプション引数に渡せば，
-        自分の定義したラベル表示を持つ箇条書きを作成することができます．
-      }
-
-      +p{
-        `labelfmt` の使い方を説明するため，
-        まず `labelfmt` 型を持つ比較的単純な関数を定義してみましょう．
-        下のコードを動かすには，標準で提供されている `list` パッケージを読み込む必要があります．
-      }
-
-      +code(```
-      let example idxlst ctx =
-        let idx-to-ib idx =
-          (read-inline ctx (embed-string (arabic idx)))
-            ++ (read-inline ctx {.})
-        in
-        idxlst |> List.map idx-to-ib
-               |> List.fold-left (++) inline-nil
-      ```);
-
-      +p{
-        この関数は`labelfmt (int list -> context -> inline-boxes)` 型を持ちます．
-        まず，関数内部で定義された `idx-to-ib` は `int -> inline-boxes` 型を持つクロージャであり，
-        この関数を `idxlst` の要素のそれぞれに適用して `inline-boxes list` 型へと変換します．
-        続いて得られたリストを左から結合することにより，最終的な `inline-boxes` 型の値を得ます．
-        したがって，もし example の第1引数に `[2; 3; 5; 7]` というリストが与えられた場合，
-        （第2引数のテキスト処理文脈により組み方は変わりますが）
-        「2.3.5.7.」という数字の列を持ったインラインボックス列が出力となります．
-      }
-
-      +p{
-        では，この `example` を `+listing` に指定するとどうなるでしょうか．
-        実際に組んでみると以下のようになります．
-      }
-
-      +example(```
-        +listing?:(example){
-          * あああ
-          * いいい
-          * ううう
-            ** ああああ
-            ** いいいい
-            ** うううう
-          * えええ
-            ** ああああ
-              *** あああああ
-              *** いいいいい
-              *** ううううう
-            ** いいいい
-          * おおお
-        }
-      ```)<%
-        +listing?:(example){
-          * あああ
-          * いいい
-          * ううう
-            ** ああああ
-            ** いいいい
-            ** うううう
-          * えええ
-            ** ああああ
-              *** あああああ
-              *** いいいいい
-              *** ううううう
-            ** いいいい
-          * おおお
-        }
-      >%
-
-      +p{
-        結果を見れば規則性が分かると思いますが，
-        `+listing` コマンドは `labelfmt` 型の関数が与えられたとき，
-        `labelfmt` に「現在の箇条書きの項目が何番目か」という情報（インデックス）を格納したリストと
-        現在のテキスト処理文脈の2つを渡し，出てきた出力をそのまま箇条書きのラベルとします．
-        なお，与えられるインデックスのリストでは
-        ${n} 番目に深いリストのインデックスが「末尾から数えて ${n} 番目の要素」 に格納されています．
-        つまりリストの先頭にあるものが最も深い，末尾にあるものが最も浅いネストの番号となります．
-        これは少し直感に反するかもしれませんが，
-        逆に並べるより実装が楽になることが多いためこのような仕様にしました．
-      }
-
-      +p{
-        この仕様さえ理解すれば，好きな箇条書き環境を定義できます．
-        たとえば，「問1.\ 」のようなラベルは以下のようにして実装できます．
-      }
-
-      +code(```
-      let label-toi idxlst ctx =
-        let idx = match idxlst with
-          | [] -> 1
-          | idx :: _ -> idx
-        in
-        let it-num = embed-string (arabic idx) in
-        read-inline ctx {問#it-num;.\ }
-      ```);
-
-      +p{
-        `let idx = ...` から始まる行で `idxlst` の一番最初の要素を取り出し，
-        それをインラインテキストに変換しています．
-        実際には enumitem パッケージの内部で `label-toi` の引数に空リストが与えられることはないはずであり，
-        それを踏まえればもう少し簡潔に書くこともできます \footnote{
-          ただし，ユーザが故意に与えた， 本パッケージに不具合があったなどの理由で
-          `label-toi` の引数に空リストが与えられてしまった場合は実行時エラーとなるため，
-          その点には注意が必要です．
-        }．
-      }
-
-      +code(```
-      let label-toi (idx :: _) ctx =
-        let it-num = embed-string (arabic idx) in
-        read-inline ctx {問#it-num;.\ }
-      ```);
-
-      +p{
-        話が少しそれました．実際に `label-toi` を使ってみましょう．
-      }
-
-      +example(```
-        +enumerate?:(label-toi){
-          * hoge
-          * fuga
-            ** fuga1
-              *** fuga11
-              *** fuga12
-            ** fuga2
-        }
-      ```)<%
-        +enumerate?:(label-toi){
-          * hoge
-          * fuga
-            ** fuga1
-              *** fuga11
-              *** fuga12
-            ** fuga2
-        }
-      >%
-
-      +p{
-        このようにネストがある場合でも，
-        ネストに応じて適宜リセットされながらラベルが表示されることが分かります．
-        では，もし以下のように定義したらどうなるでしょうか．
-      }
-
-      +code(```
-        let label-toi-nest idxlst ctx =
-          let str-nums =
-            idxlst |> List.reverse
-                   |> List.map (fun idx -> arabic idx ^ `.`)
-                   |> List.fold-left (^) ` `
-          in
-          let it-num = embed-string str-nums in
-          read-inline ctx {問#it-num;\ }
-      ```);
-
-      +p{
-        ある程度予想がついたかもしれませんが，ラベルもネストされた状態で表示されます．
-      }
-
-      +example(```
-        +enumerate?:(label-toi-nest){
-          * hoge
-          * fuga
-            ** fuga1
-              *** fuga11
-              *** fuga12
-            ** fuga2
-        }
-      ```)<%
-        +enumerate?:(label-toi-nest){
-          * hoge
-          * fuga
-            ** fuga1
-              *** fuga11
-              *** fuga12
-            ** fuga2
-        }
-      >%
-
-      +p{
-        なお，第1引数を関数内で使わなければ，番号のない箇条書きの体裁も作成できます．
-      }
-
-      +code(```
-        let label-japanese-ichi _ ctx =
-          read-inline ctx {一} ++ inline-skip 10pt
-      ```);
-
-      +p{
-        番号つき箇条書きよりも更にシンプルな定義になりました．
-        このように定義された箇条書きは以下のように用いることができます．
-      }
-
-      +example(```
-        +listing?:(label-japanese-ichi){
-          * 廣ク會議ヲ興シ萬機公論ニ決スベシ
-          * 上下心ヲ一ニシテ盛ニ經綸ヲ行フべシ
-          * 官武一途庶民ニ至ル迄各其志ヲ遂ケ人心ヲシテ倦マサラシメン事ヲ要ス
-          * 舊來ノ陋習ヲ破リ天地ノ公道ニ基クべシ
-          * 智識ヲ世界ニ求メ大ニ皇基ヲ振起スべシ
-        }
-      ```)<%
-        +listing?:(label-japanese-ichi){
-          * 廣ク會議ヲ興シ萬機公論ニ決スベシ
-          * 上下心ヲ一ニシテ盛ニ經綸ヲ行フべシ
-          * 官武一途庶民ニ至ル迄各其志ヲ遂ケ人心ヲシテ倦マサラシメン事ヲ要ス
-          * 舊來ノ陋習ヲ破リ天地ノ公道ニ基クべシ
-          * 智識ヲ世界ニ求メ大ニ皇基ヲ振起スべシ
-        }
-      >%
-    >%
-
-    +subsection{便利な関数}<%
-      +p{
-        ネストの深さに応じて箇条書きのラベルを変えたい，という要求は珍しくありません．
-        ラベルの体裁を自身で定義すれば当然そういった箇条書きも作成できます．
-        しかし，既存の体裁を使いまわしたいのであれば，
-        `Enumitem.change-by-depth` 関数を用いるのがより簡単です．
-      }
-
-      +example(```
-        +listing?:(
-          Enumitem.change-by-depth [
-            Enumitem.bracket-Alph; Enumitem.white-bullet;
-            Enumitem.paren-arabic;
-          ]
-        ){
-          * hoge
-          * fuga
-            ** fuga1
-              *** fuga11
-              *** fuga12
-            ** fuga2
-        }
-      ```)<%
-        +listing?:(
-          Enumitem.change-by-depth [
-            Enumitem.bracket-Alph; Enumitem.white-bullet; Enumitem.paren-arabic;
-          ]
-        ){
-          * hoge
-          * fuga
-            ** fuga1
-              *** fuga11
-              *** fuga12
-            ** fuga2
-        }
-      >%
-    >%
-  >%
-
-  +section{本文の体裁の指定}<%
+  +subsection{糖衣構文ベースの記法}<
     +p{
-      前節でラベルの体裁の変更方法を説明しましたが，
-      `+listing` コマンドで指定できるのはラベルの体裁のみであり，
-      本文のフォントや本文が複数行に渡るときのインデント量といった，
-      本文に関係する体裁を指定することはできませんでした．
-      そういった要素にも変更を加えたい場合は，
-      箇条書きコマンド `+listing` や `+enumerate` をより一般化した `+genlisting` コマンドを使用します．
-      `+genlisting` は `+listing` にくらべて複雑なインターフェースを持ちますが，
-      その分自由度が高く
-      \listing{
-        * 本文のフォントサイズや色といった体裁
-        * 箇条書きの項目間の幅
-        * 1つの項目内で行を折り返すときのインデント幅
-        * ネストするときに追加されるインデントの幅
-      }
-      といった項目を全てこの関数1つで制御することができます．
+      1つは \SATySFi; の箇条書きを表す専用の構文をそのまま用いてネストを表現する方法。
+      こちらは標準の itemize パッケージでも採用されているインターフェースであり、簡単に記述できるのが利点です。
+      ただし、設定できる項目の自由度はあまり高くありません。
+      便宜上、ここではこちらを\emph{糖衣構文ベースの記法}と呼びます。
     }
-
-    +subsection{`+genlisting` コマンドの仕様}<%
-
-      +p{
-        実は，`+listing` や `+enumerate` コマンドも `+genlisting` を用いて定義されています．
-        まずは `+listing` コマンドがパッケージ内部でどのように定義されているか見てみましょう．
-      }
-
-      +code(```
-        let-block ctx +listing ?:labelf item =
-          let labelf = Option.from bullet labelf in
-          read-block ctx '<+genlisting(labelf)(default-item)(item);>
-      ```);
-
-      +p{
-        このように， `+genlisting` は
-        `+genlisting(labelf)(itemf)(item);` という形で用いられます
-        （オプション引数はありません）．
-        個々の引数の意味は以下のとおりです．
-      }
-
-      +parameters{
-        * labelf
-          ** (`labelfmt (int list -> context -> inline-boxes)`)
-          ** ラベルの体裁を指定する関数．
-
-        * itemf
-          ** (`context -> int -> inline-boxes -> inline-text -> block-boxes`)
-          ** ラベル及び本文の組み方を指定する関数．
-             以下の引数を与えると，箇条書きの項目を組んでブロックボックス列を返す:
-             \enumerate{
-               * 箇条書きが組まれる位置でのテキスト処理文脈 (`context`)，
-               * 対象となる項目の深さ (`int`)．
-               * 対象となる項目にて組まれることになるラベル (`inline-boxes`)．
-               * 本文を表すインラインテキスト (`inline-text`)
-             }
-
-        * item
-          ** (`itemize`)
-          ** 箇条書きの内容．
-      }
-
-      +p{
-        1番目は `+listing` のオプション引数，3番目は `+listing` の必須引数と同じものですが，
-        `+genlisting` では追加で2番目に `itemf` 引数を指定することができます．
-        これは「深さとラベルと本文が与えられたときに，
-        箇条書きの1つの項目を組んでブロックボックス列にする」
-        関数であり，まさに箇条書きの体裁を直接指定する自由度の高い関数です．
-      }
-
-      +p{
-        `+genlisting` コマンドが呼び出されると，以下の処理を再帰的に行うことで箇条書きを組みます．
-        再帰的な処理と一項目に対する処理を分離することで，
-        柔軟性の高い箇条書きが表現できる仕組みとなっています．
-      }
-
-      +enumerate{
-        * 第1引数で与えられた `labelf` を用いて親項目のラベルを組む．
-        * 第2引数で与えられた `itemf` を用いて親項目の本文を組む
-          （そのときに先程組んだラベルのインラインボックス列を渡す）．
-        * 子項目を親と同じ要領で組み，親項目のブロックボックス列の下に結合する．
-      }
-
-    >%
-
-    +subsection{`+genlisting` を用いた指定}<%
-
-      +p{
-        `+listing` の定義の中で `+genlisting` の第2引数に渡されているのは `default-item` という関数です．
-        これは `Enumitem.default-item` とすることで使用でき，
-        実際には以下のように定義されています：
-      }
-
-      +code(```
-        let default-item ctx depth ib-label text =
-          let text-indent =
-            let fsize = get-font-size ctx in
-            fsize *' ((EnumitemParam.get item-indent-ratio) *. (float depth))
-          in
-          let ib-text =
-            let index-width = get-natural-width ib-label in
-            let item-text-width =
-              (get-text-width ctx) -' text-indent -' index-width
-            in
-            embed-block-top ctx item-text-width (fun ctx ->
-              line-break true true ctx (read-inline ctx text ++ inline-fil)
-            )
-          in
-          line-break true true ctx
-            ((inline-skip text-indent) ++ ib-label ++ ib-text)
-      ```);
-
-      +p{
-        この関数には，ラベルを受け取って本文を組み上げる処理の本質が書かれています．
-        基本的にはこの関数をいろいろいじって自分好みの関数に仕上げ，
-        それを `+genlisting` の第2引数にわたすことによって，
-        箇条書きの体裁を自由に変更することができます．
-        しかし，本文のテキスト処理文脈をいじる程度の変更であれば，
-        `default-item` をそのまま用いて比較的簡単に実装することができます．
-      }
-
-      +example(```
-        % プリアンブルに書く
-        let gray-item ctx =
-          let ctx2 = ctx |> set-text-color (Color.gray 0.7) in
-          Enumitem.default-item ctx2
-
-        % 本文中に書く
-        +genlisting(Enumitem.paren-arabic)(gray-item){
-          * hoge
-          * fuga
-            ** fuga1
-              *** fuga11
-              *** fuga12
-            ** fuga2
-        }
-      ```)<%
-        +genlisting(Enumitem.paren-arabic)(gray-item){
-          * hoge
-          * fuga
-            ** fuga1
-              *** fuga11
-              *** fuga12
-            ** fuga2
-        }
-      >%
-      +p{
-        見ての通り，第2引数の関数内部でテキスト処理文脈を変更してもラベルの色は変化しません．
-        ラベルと本文のインラインボックス列は別のテキスト処理文脈に基づいて組まれるためです．
-        ラベルの色を変更したい場合は，前節で説明したように第1引数を変更します．
-      }
-      +example(```
-        % プリアンブルに書く
-        let paren-arabic-gray idxlst ctx =
-          let ctx2 = ctx |> set-text-color (Color.gray 0.7) in
-          Enumitem.paren-arabic idxlst ctx2
-
-        % 本文中に書く
-        +genlisting(paren-arabic-gray)(gray-item){
-          * hoge
-          * fuga
-            ** fuga1
-              *** fuga11
-              *** fuga12
-            ** fuga2
-        }
-      ```)<%
-        +genlisting(paren-arabic-gray)(gray-item){
-          * hoge
-          * fuga
-            ** fuga1
-              *** fuga11
-              *** fuga12
-            ** fuga2
-        }
-      >%
-
-    >%
-  >%
-
-  +section{グローバルパラメータを用いた指定}<%
-    +p{
-      本パッケージで制御できる箇条書きの体裁は，
-      ほぼ全て今までに述べてきた方法でカスタマイズすることができます．
-      とはいえ，ユーザが何かを変更したいと思うたびに，
-      それに応じて新たな関数を用意しなければならないのは面倒かもしれません．
-      たとえば，箇条書きの字下げ幅は本来1自由度しかありませんから
-      1つのパラメータの値を変更すれば対処できそうなものですが，
-      今までの方法では「箇条書きの字下げ幅を変更した本文体裁指定用関数」を新たに定義する必要があります．
-      その面倒さを避けるため， 本パッケージではいくつかの設定項目を「グローバルパラメータ」として保持しており，
-      必要に応じて狙い撃ちして変更することができます．
-    }
-
-    +subsection{グローバルパラメータの種類}<%
-      +p{
-        現時点では，以下のグローバルパラメータが `Enumitem` モジュールに用意されています．
-      }
-
-      +parameters{
-        * item-indent-ratio
-          ** float 型のパラメータ (default: 2.0)
-          ** 現在のフォントサイズに対する相対的な割合を指定して，
-             箇条書きのネストが行われたときに，自分の親の項目から行うインデントの量を表す．
-
-        * label-width-ratio
-          ** float 型のパラメータ (default: 2.0)
-          ** 現在のフォントサイズに対する相対的な割合を指定して，
-             デフォルトで定義されている `raw-arabic` や `bullet` などのラベルの幅を表す．
-             これらのラベルは右揃えで組まれるが，
-             その際に必ず (`font-size *' label-width-ratio`) の分だけの空白が左端から確保される．
-      }
-
-      +p{
-        「float 型のパラメータ」 と便宜上書いているものは，
-        正確には `EnumitemParam` モジュールにて定義された `float EnumitemParam.t` という型です．
-        パラメータを指定したりデフォルト値を設定したりするインターフェースが用意されているものの，
-        基本的には `float ref` と似たような型である，という理解で問題ありません．
-      }
-      +p{
-        なお，新たなグローバルパラメータをユーザ定義することもできますが，
-        箇条書きという趣旨から外れるためここでは割愛します
-        \footnote{気になる場合は，
-        本パッケージのソースを読んでいただければなんとなく使い方が分かるかと思います．}．
-      }
-    >%
-
-    +subsection{パラメータの値の変更}<%
-      +p{
-        これらのパラメータに好きな値を設定する方法はいくつかあります．
-        1つ目は，プリアンブル部分で以下のように指定する方法です．
-        文書全体に共通する値を指定するときに使います．
-      }
-    >%
 
     +code(```
-      let () = Enumitem.item-indent-ratio |> EnumitemParam.set 5.0
+    +listing?:(listing-default-label){
+      * aaa
+      * bbb
+        ** bbb の子1
+        ** bbb の子2
+          *** bbb の子2 の子1
+      * ccc
+        ** ccc の子1
+        ** ccc の子2
+    }
     ```);
 
     +p{
-      このように書くと，
-      本文中では常に `item-indent-ratio` の値が 5.0 であるものとして組まれます．
-      `EnumitemParam.set` は `'a -> 'a EnumitemParam.t -> unit` 型を持つ関数で，
-      指定したパラメータに特定の値を代入することができます．
+      なお、 `+listing` のオプション引数のデフォルトは `listing-default-label` であるため、
+      上のコードの `?:(listing-default-label)` に相当する箇所は省略することができます
+      （次の例との比較のためあえてつけています）。
     }
+  >
+
+  +subsection{ブロックベースの記法}<
 
     +p{
-      2つ目は，本文中で
-      `+set-param` や `\set-param` コマンドを用いる方法です．
-      この方法を用いると，本文の途中であってもパラメータを変更することができます．
+      もう1つは \SATySFi; の箇条書き専用構文を用いることなく、
+      `+itemize` 及び `+item` のみを用いてブロックテキストベースで箇条書きのネストを表現する方法。
+      星印 `*` だけでアイテムの始まりを示すことができた糖衣構文ベースの記法とは異なり、
+      項目のたびに `+item` を書く必要があります。
+      記法としては冗長になるものの、箇条書きを記述する際の自由度が高いというメリットがあります。
+      こちらを\emph{ブロックベースの記法}と呼びます。
     }
 
-    +example(```
-      +listing{
-        * hogehoge
-        * fugafuga
-      }
-      +set-param(Enumitem.label-width-ratio)(4.0);
-      +p{ここからラベルの幅が広くなる．}
-      +listing{
-        * hogehoge
-        * fugafuga
-      }
-      +p{ここからラベルの幅が狭くなる．
-         \set-param(Enumitem.label-width-ratio)(1.0);}
-      +listing{
-        * hogehoge
-        * fugafuga
-      }
-    ```)<%
-      +listing{
-        * hogehoge
-        * fugafuga
-      }
-      +set-param(Enumitem.label-width-ratio)(4.0);
-      +p{ここからラベルの幅が広くなる．}
-      +listing{
-        * hogehoge
-        * fugafuga
-      }
-      +p{ここからラベルの幅が狭くなる．
-         \set-param(Enumitem.label-width-ratio)(1.0);}
-      +listing{
-        * hogehoge
-        * fugafuga
-      }
-    >%
-    +set-param(label-width-ratio)(2.0);
-
-    +p{
-      しかし，パラメータを途中から永続的に変えるのは，
-      後ろの原稿に思わぬ影響を与えうるという点で多少リスキーでもあります．
-      そこで，3つ目の方法として一時的にパラメータの値を変更するインターフェースも用意されています．
-      以下の `+with-param` や `\with-param` コマンドを用います．
-    }
-    +example(```
-      +listing{
-        * hogehoge
-        * fugafuga
-      }
-      +with-param(Enumitem.label-width-ratio)(4.0)<
-        +p{ここだけラベルの幅が広くなる．}
-        +listing{
-          * hogehoge
-          * fugafuga
-        }
-      >
-      +p{ここはラベルの幅が前と同じ．}
-      +listing{
-        * hogehoge
-        * fugafuga
-      }
-    ```)<%
-      +listing{
-        * hogehoge
-        * fugafuga
-      }
-      +with-param(Enumitem.label-width-ratio)(4.0)<
-        +p{ここだけラベルの幅が広くなる．}
-        +listing{
-          * hogehoge
-          * fugafuga
-        }
-      >
-      +p{ここはラベルの幅が前と同じ．}
-      +listing{
-        * hogehoge
-        * fugafuga
-      }
-    >%
-
-  >%
-
-  +section{動的なフラグを用いたラベル操作}<%
-    +subsection{`+xgenlisting` コマンド}<%
-      +p{
-        たとえば，以下のような To-Do リストを作成したくなったとします．
-      }
-
-      +block-frame<%
-        +todo-list{
-          * ミルクを買う．
-          * The \SATySFi;book を読む．
-          * \done; \SATySFi; を完全に理解する．
-          * 課題を解く．
-        }
-      >%
-
-      +p{
-        簡単のため，ラベルを作成するための関数は既に用意されているものとしましょう．
-        たとえば，以下の関数 `square-label` は `bool -> context -> inline-boxes` 型を持ち，
-        第1引数 `is-checked` が true のときチェック済みのチェックボックスを，
-        false のときチェック済みでないチェックボックスを描画します．
-      }
-      +code(```
-        let square-label is-checked ctx =
-          let fs value = (get-font-size ctx) *' value in
-          let fsize = fs 1.0 in
-          let gr-square (x, y) =
-            stroke 0.5pt Color.black
-              (Gr.rectangle (0pt, 0pt) (fs 0.5, fs 0.5 ))
-              |> shift-graphics (x, y +' fs 0.15)
-          in
-          let gr-mark-done (x, y) =
-            stroke 0.5pt Color.black (
-              Gr.poly-line (fs (0.0 -. 0.1), fs 0.45)
-                [(fs 0.15, fs 0.15); (fs 0.75, fs 0.85)])
-                |> shift-graphics (x, y +' fs 0.15)
-          in
-          let gr point =
-            if is-checked then
-              [gr-square point; gr-mark-done point]
-            else
-              [gr-square point]
-          in
-          inline-skip 10pt ++ (inline-graphics fsize fsize 0pt gr)
-      ```);
-
-      +p{
-        今までに紹介された `+listing` を用いても，
-        上のように「3番目のみチェックが付いたリスト」を実現することはできます．
-        以下のようにパターンマッチなどを用いて，
-        チェックを付けたい場所のみ場合分けして処理すればよいのです．
-      }
-
-      +code(```
-      +listing?:(fun idxlst ctx -> (
-        let is-checked = match idxlst with
-          | [3] -> true
-          | _ -> false
-        in
-        square-label is-checked ctx
-      )){
-        * ミルクを買う．
-        * The \SATySFi;book を読む．
-        * \SATySFi; を完全に理解する．
-        * 課題を解く．
-      }
-      ```);
-
-      +p{
-        しかしこれは今回の用途を考えるとあまり直観的ではなく，
-        また編集もしやすいとはいえません．
-        「ミルクを買う」にチェックを付けたいときに
-        本文から離れた場所を編集しなければならないのは手間ですし，
-        「どこにチェックが付いているのか」をひと目で判断することができません．
-        また今回は項目数が4つでしたが，もっと長いリストでいちいち上からインデックスを数えるのは手間です．
-        ラベル指定用の関数は，このように例外的にまたは動的にレイアウトを変更する用途にはあまり適していません．
-      }
-
-      +p{
-        本パッケージではこのようなケースに対応するため，
-        本文中でパラメータに値をセットし，その値をラベルに反映させる方法を提供しています．
-        たとえば先程の To-Do リストは，
-        プリアンブルにて以下のように定義された `+todo-list` 及び `\done` コマンドで作成できます．
-      }
-
-      +code(```
-      let done = EnumitemBase.make-param false
-      let-inline \done = {\set-item(done)(true);}
-      let-block +todo-list item = '<
-        +xgenlisting
-          (fun idx ctx -> square-label (EnumitemParam.get done) ctx)
-            (default-item)(item);
-      >
-      ```);
-
-      +p{
-        この `+todo-list` 及び `\done` コマンドを使うと，
-        先程の箇条書きは以下のようにシンプルに書くことができます．
-      }
-
-      +example(```
-        +todo-list{
-          * ミルクを買う．
-          * The \SATySFi;book を読む．
-          * \done; \SATySFi; を完全に理解する．
-          * 課題を解く．
-        }
-      ```)<%
-        +todo-list{
-          * ミルクを買う．
-          * The \SATySFi;book を読む．
-          * \done; \SATySFi; を完全に理解する．
-          * 課題を解く．
-        }
-      >%
-
-      +p{
-        このように，本文に `\done;` というコマンドが付いているアイテムに限り
-        チェックマークが付くようになります．
-        `\done` の位置は，3番目のアイテムの本文中であればどこにあってもかまいません．
-      }
-
-      +p{
-        何が起きたのか，もうすこし詳細に説明します．
-        ポイントは以下の4点です．
-      }
-
-      +listing{
-        * `EnumitemBase` というモジュールの `make-param` 関数を用いて，
-          箇条書きのアイテム内で一時的な値を保持するための器（ローカルパラメータ）を定義することができる．
-        * ローカルパラメータには，本文中で `\set-item(param)(value);` と打つことで一時的に値を設定することができる．
-        * `+xgenlisting` を使うと，ラベルの体裁を指定する際に
-          `EnumitemParam.get` 関数でパラメータの値を受け取り，その値に応じてラベルの出力を変更することができる．
-        * `\set-item` で変更した値はその項目が終わると破棄され，デフォルト値にもどる．
-      }
-
-      +p{
-        先程の例の最初にある `EnumitemBase.make-param` という関数で，
-        `done` という名前のローカルパラメータを生成しています．
-        このローカルパラメータは前節で説明したグローバルパラメータとは少し異なり，
-        箇条書きの項目の内部でパラメータを変更しても，その項目が終わったときに設定が破棄されます．
-        したがって3番目の項目に限って `\done` コマンドをつけた場合，
-        3番目のラベルにはチェックマークが付きますが， 4番目には付きません．
-      }
-
-      +p{
-        今回定義した `done` は bool 型を保持する比較的単純なローカルパラメータでしたが，
-        それ以外にも `int` 型や `inline-text` 型など，
-        様々な型を持つパラメータを作成することができます．
-        % `int list -> context -> inline-boxes` のような型も入れることができるため，
-        工夫次第では，パラメータの値に応じてラベルのインデックスを変更したり，
-        ラベルの体裁そのものを変えたり，と多彩なカスタマイズが可能となります．
-      }
-
-    >%
-    +subsection{`+xgenlisting` の注意点}<%
-
-      +p{
-        `+xgenlisting` は便利なコマンドですが， `+genlisting` にはない欠点が存在します
-        \footnote{この欠点のため， `+genlisting` を `+xgenlisting` で置き換えることができませんでした．}．
-        それは「本文に副作用のあるコマンドを入れると不具合が起きやすい」 ということです．
-        たとえば，内部でカウンタをインクリメントさせる `\footnote` を `+xgenlisting` の本文で用いると，
-        （実装にもよるとは思いますが）脚注の数字が2つインクリメントされてしまう可能性があります．
-      }
-      +p{
-        理由は実装上の事情にあります．
-        実は，「本文中にあるコマンドを読み取り，その値に応じてラベルを更新する」
-        という組み方は少し不自然なのです．
-        なぜなら本来，ラベルを組み終わってはじめて後続する本文のテキスト幅が分かり，
-        本文を組むことができるようになるからです．
-        ラベルを組まないと本文が組めない，
-        しかし本文を読まないとラベルを更新できない，というのが実装の困難な点でした．
-      }
-      +p{
-        そこで， `+xgenlisting` では
-        「ラベルを組む前に `read-inline` で本文を読み，読み終わったものは一度破棄する」
-        という方式で実装を行いました．
-        本文中のコマンドは `read-inline` で読まれることにより評価され，
-        `\set-item` がある場合はそのタイミングで対象のローカルパラメータが一時的な値へとセットされます．
-        その後であればラベルを組むことができ，
-        ラベルさえ組めれば再度改めて本文を組むことができます．
-      }
-
-      +p{
-        このとき，本文は `read-inline` によって2度評価されます．
-        副作用のないコマンドであれば何度評価されても結果は変わりませんから問題ありませんが，
-        副作用のあるコマンド，特に2度だけ呼ばれることを想定していないコマンドを
-        `+xgenlisting` の本文のインラインテキスト中に入れると，このことによって挙動がおかしくなるのです．
-      }
-
-    >%
-  >%
-
-  +section?:(`sse:description`){定義リストの作成}<%
-    +p{
-      \LaTeX; や HTML において標準で用意されている箇条書きは3種類ありました．
-      順序なしリスト（番号のない箇条書き），順序リスト（番号付き箇条書き），
-      そして定義リストです．
-    }
-
-    +description{
-      * 順序なしリスト
-
-        ** 順序を表すインデックスのない箇条書きです．
-           通常，\LaTeX; では itemize 環境，
-           HTML では `<ul>` タグにより組まれます．
-
-      * 順序リスト
-
-        ** 順序を表すインデックスのある箇条書きです．
-           通常，\LaTeX; では enumerate 環境，
-           HTML では `<ol>` タグにより組まれます．
-
-      * 定義リスト
-
-        ** 各インデックス毎に固有の単語が付与されている箇条書きです．
-           通常，\LaTeX; では description 環境，
-           HTML では `<dl>` タグにより組まれます．
-        ** この説明で用いられているリストは定義リストです．
-
-    }
-
-    +p{
-      1 番目及び 2 番目のリストは
-      \SATySFi; 標準の itemize パッケージでも実現することが出来ますし，
-      本パッケージでも実現できることは今までに述べたとおりです．
-      それに対し，3番目の定義リストを実現する手段は標準の itemize パッケージでは用意されていませんでした．
-    }
-
-    +p{
-      本パッケージでは，定義リストを実現する `+gendescription` コマンドを用意しています．
-      このコマンドを用いれば汎用性の高い定義リストを記述することができます．
-      具体例を以下に示します．
-    }
-
-    +example(```
-    +gendescription(|
-      nextline = false;
-      title-inner-gap = 10pt;
-      inner-indent = (fun title-wid -> title-wid);
-      title-func =
-        (fun ctx title -> read-inline ctx {\textbf{#title;}} );
-    |){
-      * 英語のパングラム
-        ** The quick brown fox jumps over the lazy dog.
-
-      * 日本語のパングラム
-        ** いろはにほへとちりぬるを
-           わかよたれそつねならむ
-           うゐのおくやまけふこえて
-           あさきゆめみしゑひもせすん
-        ** いろはにほへとちりぬるを
-           わかよたれそつねならむ
-           うゐのおくやまけふこえて
-           あさきゆめみしゑひもせすん
-    }
-    ```)<%
-      +gendescription(|
-        nextline = false;
-        title-inner-gap = 10pt;
-        inner-indent = (fun title-wid -> title-wid);
-        title-func = (fun ctx title -> read-inline ctx {\emph{#title;}});
-      |){
-        * 英語のパングラム
-          ** The quick brown fox jumps over the lazy dog.
-
-        * 日本語のパングラム
-          ** いろはにほへとちりぬるを
-             わかよたれそつねならむ
-             うゐのおくやまけふこえて
-             あさきゆめみしゑひもせすん
-          ** いろはにほへとちりぬるを
-             わかよたれそつねならむ
-             うゐのおくやまけふこえて
-             あさきゆめみしゑひもせすん
-      }
-    >%
-
-    +p{
-      具体例を見れば分かる通り，
-      `+genlisting` などのコマンドとはかなりインターフェースが異なります．
-      `+gendescription` は2つの引数 `record` と `inner` をとります．
-      `record` は description コマンドの体裁を設定するレコードであり，
-      `inner` は表示したい内容を並べる `itemize` 型の引数です．
-    }
-
-    +p{
-      \SATySFi; には現在，\LaTeX; の `\item[label]` のように
-      箇条書きの item 毎にラベルを変更するための記法がありません．
-      そこで， `+gendescription` コマンドでは
-      `inner` 部分を以下のように定めることで，
-      \SATySFi; の箇条書き構文のインターフェースに沿った定義リストを実現しました
-      \footnote{
-        説明を読むよりも前述の具体例を見たほうが使用法が掴みやすいでしょう．
-      }．
-    }
-
-    +listing{
-      * 1番目の深さの item （ `*` が1つ並んでいるところ）に，
-        定義リストの各 item に相当する見出しを書く．
-
-      * 各見出しの子に相当する item （ `*` が2つ並んでいるところ）に，
-        定義リストの本文を書く．
-        複数の子 item を同じ親の下に並べて書くことで，複数の段落を記述することができる．
-    }
-
-    +p{
-      また，`+gendescription` コマンドでは第1引数でレコードを渡すことにより，
-      柔軟に定義リストを構成することができます．
-      レコードの値は4種類あり，
-      これらは全てオプションではなく必須引数です．
-    }
-
-    +parameters{
-      * nextline
-        ** (`bool`)
-        ** 各 item のタイトルと本文の間に改行を挟むかどうか．
-           true ならば改行を行う． false ならば改行を行わない．
-
-      * title-inner-gap
-        ** (`length`)
-        ** 各 item のタイトルと本文の間に挿入する最小の空白幅．
-           どちらかというと「各 item のタイトルの右に常においておく余白」
-           というイメージが近い．
-
-      * inner-indent
-        ** (`length -> length`)
-        ** 「タイトルの幅を引数として，本文インデント量を返す関数」を指定する．
-           わざわざ関数を指定するようにしているのは，
-           タイトル幅に応じてインデントを動的に変えられるようにするため．
-           たとえば `(fun _ -> 10pt)` を指定すれば，
-           本文ではタイトルの幅の長さに関わらず常に 10pt のインデントが行われる
-           （ただし，タイトルが記述されている行を除く）．
-           また，`(fun title-wid -> title-wid)` を指定すれば，
-           タイトル幅（title-inner-gap を含む）と同じだけのインデントが行われる．
-
-      * title-func
-        ** (`context -> inline-text -> inline-boxes`)
-        ** 「テキスト処理文脈及びタイトルのインラインテキストを引数として，
-           タイトルのインラインボックス列を返す関数」を指定する．
-           最も簡単なのは `read-inline` 関数をそのまま指定すること．
-           この関数内部で `\textbf` のコマンドを挟んだり，
-           テキスト処理文脈をいじってフォントを変更したりすることで，
-           各項目のタイトルだけを太字にする，といった処理が可能になる．
-    }
-
-    +p{
-      なお，本パッケージには必要なレコード引数が事前に埋められた
-      `+description` コマンドも用意されています．
-    }
     +code(```
-      let desc-config = (|
-        nextline = true;
-        title-inner-gap = 5pt;
-        inner-indent = (fun title-wid -> 20pt);
-        title-func = read-inline;
-      |)
-
-      let-block +description item = '<
-        +gendescription(desc-config)(item);
+      +itemize(listing-default-label)<
+        +item{aaa}<>
+        +item{bbb}<
+          +item{bbb の子1}<>
+          +item{bbb の子2}<
+            +item{bbb の子2 の子1}<>
+          >
+        >
+        +item{ccc}<
+          +item{ccc の子1}<>
+          +item{ccc の子2}<>
+        >
       >
     ```);
-    
-  >%
 
->%
+    +p{
+      ここで示した2つのコードは、どちらも最終的には同様の結果となることに注意してください。
+    }
+
+  >
+
+  +subsection{ブロックベースの記法の利点}<
+
+    +p{
+      糖衣構文ベースでもブロックベースでも記述できる先程示したような箇条書きは、
+      より簡潔に書ける糖衣構文ベースの記法のほうが書きやすいといえます。
+      ブロックベースの記法の利点は、糖衣構文ベースの記法と比べて自由度が高く、
+      より複雑なルールに則った箇条書きを柔軟に表現できる点です。
+    }
+
+    +p{
+      ブロックベースの記法によって自然に実現できるものは、大きく分けて3種類あります。
+      1つ目は、箇条書きの途中で項目の体裁を変更すること。
+      `+item` コマンドの1番目のオプション引数によって、自身の要素の体裁のみを変更できます。
+    }
+
+    +example(```
+      +itemize(dot-arabic-rec)<
+        +item{aaa}<>
+        +item?:(paren-alph){bbb}<
+          +item{bbb の子1}<>
+          +item{bbb の子2}<
+            +item{bbb の子2 の子1}<>
+          >
+        >
+        +item?:(white-bullet){ccc}<
+          +item{ccc の子1}<>
+          +item{ccc の子2}<>
+        >
+      >
+    ```)<
+      +itemize(dot-arabic-rec)<
+        +item{aaa}<>
+        +item?:(paren-alph){bbb}<
+          +item{bbb の子1}<>
+          +item{bbb の子2}<
+            +item{bbb の子2 の子1}<>
+          >
+        >
+        +item?:(white-bullet){ccc}<
+          +item{ccc の子1}<>
+          +item{ccc の子2}<>
+        >
+      >
+    >
+
+    +p{
+      そして、2番目のオプション引数によって自身の子要素の体裁全てを変更できます。
+    }
+
+    +example(```
+      +itemize(dot-arabic-rec)<
+        +item{aaa}<>
+        +item({bbb})?:(paren-alph)<
+          +item{bbb の子1}<>
+          +item{bbb の子2}<
+            +item{bbb の子2 の子1}<>
+          >
+        >
+        +item({ccc})?:(white-bullet)<
+          +item{ccc の子1}<>
+          +item{ccc の子2}<>
+        >
+      >
+    ```)<
+      +itemize(dot-arabic-rec)<
+        +item{aaa}<>
+        +item({bbb})?:(paren-alph)<
+          +item{bbb の子1}<>
+          +item{bbb の子2}<
+            +item{bbb の子2 の子1}<>
+          >
+        >
+        +item({ccc})?:(white-bullet)<
+          +item{ccc の子1}<>
+          +item{ccc の子2}<>
+        >
+      >
+    >
+
+    +p{
+      2つ目は、項目の下に任意のブロックテキストを配置できること。
+    }
+
+    +example(```
+      +itemize(listing-default-label)<
+        +item{ここは最初の段落です。ラベルは最初の段落の冒頭に付きます。}<
+          +pn{
+            ここは2番目の段落です。
+            2番目以降であれば自由にブロックテキストを挿入できます。
+            以下はコードブロックを挿入する例。
+          }
+          +code(`aaa`);
+          +item{このように、途中で箇条書きを挟むことができます。}<
+            +item{当然ネストさせることもできます。}<>
+          >
+          +pn{
+            箇条書きを挟んだ後、元の階層に戻って再び段落を再開することができます。
+          }
+        >
+      >
+    ```)<
+      +itemize(listing-default-label)<
+        +item{ここは最初の段落です。ラベルは最初の段落の冒頭に付きます。}<
+          +pn{
+            ここは2番目の段落です。
+            2番目以降であれば自由にブロックテキストを挿入できます。
+            以下はコードブロックを挿入する例。
+          }
+          +code(`aaa`);
+          +item{このように、途中で箇条書きを挟むことができます。}<
+            +item{当然ネストさせることもできます。}<>
+          >
+          +pn{
+            箇条書きを挟んだ後、元の階層に戻って再び段落を再開することができます。
+          }
+        >
+      >
+    >
+
+    +p{
+      3つめは、ユーザが自由に箇条書きの項目単位でのコマンドを定義できること。
+    }
+
+    +code(```
+      % プリアンブルで定義しておく
+      let-block +genin it = '< +item?:(text-label{下人「}){#it;」}<> >
+      let-block +rouba it = '< +item?:(text-label{老婆「}){#it;」}<> >
+    ```);
+
+    +example(```
+      +itemize(nofmt)<
+        +genin{何をしていた。云え。云わぬと、これだぞよ。}
+        +genin{
+          己は検非違使の庁の役人などではない。
+          今し方この門の下を通りかかった旅の者だ。
+          だからお前に縄をかけて、どうしようと云うような事はない。
+          ただ、今時分この門の上で、何をして居たのだか、それを己に話しさえすればいいのだ。
+        }
+        +rouba{
+          この髪を抜いてな、この髪を抜いてな、鬘にしようと思うたのじゃ。
+        }
+      >
+    ```)<
+      +itemize(nofmt)<
+        +genin{何をしていた。云え。云わぬと、これだぞよ。}
+        +genin{
+          己は検非違使の庁の役人などではない。
+          今し方この門の下を通りかかった旅の者だ。
+          だからお前に縄をかけて、どうしようと云うような事はない。
+          ただ、今時分この門の上で、何をして居たのだか、それを己に話しさえすればいいのだ。
+        }
+        +rouba{
+          この髪を抜いてな、この髪を抜いてな、鬘にしようと思うたのじゃ。
+        }
+      >
+    >
+
+    % +p{
+    %   また、項目の単位がブロックコマンドであるために、
+    %   ユーザが自由にコマンドを定義できるのもブロックベースの記法の利点です。
+    % }
+
+    % +p{
+    %   これらを応用すれば、定義リストのような箇条書きを実現することもできます。
+    % }
+    % 
+    % +example(```
+    % ```)<
+    %   +itemize(nofmt)<
+    %     +item?:(description {定義項目1}){これが定義内容です。}<>
+    %     +item?:(description {ちょっと長めの定義項目2}){
+    %       これがちょっと長めの定義内容です。項目だけでなく本文も少しだけ長めです。
+    %     }<>
+    %     +item?:(description-newline {だいぶ長いから改行挟んだほうが良い定義項目3}){}<
+    %       +pn{
+    %         こちらは改行を挟んでおり、本文も長めです。
+    %         このように通常の段落を入れることができます。
+    %       }
+    %     >
+    %   >
+    % >
+
+  >
+
+  +subsection{2つの記法の併用}<
+
+    +p{
+      2つの記法は組み合わせて使用することもできます。
+      `+item{}<>` のブロックテキスト中で `+sublist` を用いると、
+      ブロックベースの記法内で糖衣構文を導入することができます。
+    }
+
+    +code(```
+      +itemize(listing-default-label)<
+        +item{aaa}<>
+        +item{bbb}<
+          +sublist(listing-default-label){
+            * bbb の子1
+            * bbb の子2
+              ** bbb の子2の子1
+          }
+        >
+        +sublist(listing-default-label){
+          * ccc
+            ** ccc の子1
+            ** ccc の子2
+        }
+      >
+    ```);
+
+    +p{
+      `+listing` のインラインテキスト中で `\subitem` を用いると、
+      先程の例とは逆に糖衣構文ベースの記法内でブロックベースの `+item` コマンドなどを用いることができます。
+    }
+
+    +code(```
+      +listing{
+        * aaa
+        * bbb
+          \subitem<
+            +item{bbb の子1}<>
+            +item{bbb の子2}<
+              +item{bbb の子2 の子1}<>
+            >
+          >
+        * ccc
+          \subitem<
+            +item{ccc の子1}<>
+            +item{ccc の子2}<>
+          >
+      }
+    ```);
+
+    +p{
+      また、糖衣構文ベースの記法の中で糖衣構文ベースの記法を作成できる `\sublist` もあります。
+      こちらを用いると、糖衣構文ベースの記法であってもラベルの体裁を変更しつつネストさせることができます。
+    }
+
+    +code(```
+      +listing{
+        * aaa
+        * bbb
+          \sublist(listing-default-label){
+            * bbb の子1
+            * bbb の子2
+              \sublist(listing-default-label){
+                * bbb の子2 の子1
+              }
+          }
+        * ccc
+          \sublist(listing-default-label){
+            * ccc の子1
+            * ccc の子2
+          }
+      }
+    ```);
+  >
+
+  +subsection{`enumitem` パッケージにおける箇条書きの等価性}<
+
+    +p{
+      `enumitem` パッケージには様々なコマンドが定義されていますが、
+      実はほぼ全てのコマンドは `+item` というコマンドのみを用いて等価に書き表すことができます。
+    }
+
+    +p{
+      たとえば `+item` コマンドを用いる全ての箇条書きは全て `+itemize` コマンドで囲むことになっていますが、
+      実はこの `+itemize` も `+item` の一種にすぎません。
+      実際、以下の2つのコードは等価です：
+    }
+
+    +code(```
+    +itemize(bullet)<
+      +item{foo bar}<>
+    >
+    ```);
+
+    +code(```
+    +item?:(EnumitemFormat.init)({})?:(bullet)<
+      +item{foo bar}<>
+    >
+    ```);
+
+    +p{
+      また、 `+listing` を用いたコードも、
+      実は内部で再帰的に `+item` を用いたインラインテキストへ書き換えるような実装となっています。
+    }
+
+    +code(```
+    +listing?:(bullet){
+      * foo
+        ** foo1
+        ** foo2
+      * bar
+    }
+    ```);
+
+    +code(```
+    +item?:(EnumitemFormat.init)({})?:(bullet)<
+      +item{foo}<
+        +item{foo1}<>
+        +item{foo2}<>
+      >
+      +item{bar}<>
+    >
+    ```);
+
+    +p{
+      更に、インラインテキストの中に子構造を記述できる `\sublist` などのコマンドも、
+      最終的には `+item` を用いた木構造のコードにほぼ等価となるよう実装されています。
+    }
+
+    +code(```
+    +listing?:(bullet){
+      * foo
+        \sublist(dot-arabic){
+          * foo1
+          * foo2
+        }
+      * bar
+        \subitem<
+          +item{bar1}<>
+          +item{bar2}<>
+        >
+    }
+    ```);
+
+    +code(```
+    +item?:(EnumitemFormat.init)({})?:(bullet)<
+      +item{foo}<
+        +item?:(dot-arabic){foo1}<>
+        +item?:(dot-arabic){foo2}<>
+      >
+      +item{bar}<
+        +item{bar1}<>
+        +item{bar2}<>
+      >
+    >
+    ```);
+
+  >
+
+>
+
+
++section{機能一覧}<
+
+  +subsection{`Enumitem` モジュール}<
+
+    +p{
+      `Enumitem` モジュールは本パッケージの根幹となるコマンドを定義します。
+      最も大切なのは `+item` コマンドであり、上で述べたように
+      `Enumitem` パッケージで提供される主要なコマンドは
+      ほとんど `+item` を用いたブロックボックス列に展開される仕組みになっています。
+      `+item` は以下の引数を取ります。
+    }
+
+    +code(```
+    +item?:( itemfmt-self )({ text-body })?:( itemfmt-child )< children >
+    ```);
+
+    +p{引数の詳細は以下のとおりです。}
+
+    +block-frame<
+      +description<
+
+        +param{itemfmt-self}{`itemfmt`、オプション}<
+          +pn{
+            自分自身の項目の体裁。
+            省略した場合は、自身の親で設定されたフォーマットが用いられる。
+            あくまで自分自身の項目のみに影響があり、後述の通り、自身の子要素には反映されない。
+          }
+        >
+
+        +param{text-body}{`inline-text`、必須}<
+          +pn{
+            自分自身の項目の本文。ラベルは本文の左端に付く。
+            空のインラインテキストを指定することもできる。
+            その場合はフォーマットの `display-label-with-empty-body` オプションによってラベルが付くかどうか変化する。
+          }
+        >
+
+        +param{itemfmt-child}{`itemfmt`、オプション}<
+          +pn{
+            子要素の項目の体裁のデフォルト値。省略した場合、
+            子要素は自身の親で設定されたフォーマットを引き継ぐ（`itemfmt-self` の値は用いられない）。
+          }
+        >
+
+        +param{children}{`block-text`、必須}<
+          +pn{
+            子要素の項目。空のブロックテキストを指定することもでき、その場合は `block-nil` と同等の扱いとなる。
+          }
+        >
+
+      >
+    >
+
+  >
+
+  +subsection{`itemfmt` 型}<
+
+    +p{
+      `itemfmt` 型は `enumitem` パッケージで定義されている最も重要な型であり、
+      箇条書きの体裁の全てを決定づけるものです。
+      `itemfmt` 型は `context -> int list -> itemconfig` 型のエイリアスであり、
+      現在のテキスト処理文脈と、対象となる項目のインデックスの列を与えたときに
+      ラベルの体裁やインデント量といった設定値をまとめたレコードを返すような関数です。
+      `itemconfig` は以下のフィールドを持つレコードとなっています。
+    }
+
+    +block-frame<
+      +description<
+
+        +param{indent}{`length -> length`}<
+          +pn{
+            左側のインデント量を与える関数。より具体的には、
+            「`label` フィールドの値で決定されるラベルのボックスの横幅を与え、インデント量を返す関数」。
+            項目の本文は（ラベルの付与される先頭の行を除き）全てここで決定される長さだけインデントされる。
+            たとえば恒等写像 `(fun len -> len)` を与えると、箇条書きの本文はラベルの長さだけインデントされる。
+          }
+        >
+
+        +param{indent-right}{`length`}<
+          +pn{
+            右側のインデント量。
+          }
+        >
+
+        +param{label}{`inline-boxes`}<
+          +pn{
+            ラベルを表すインラインボックス列。
+          }
+        >
+
+        +param{label-with-empty-body}{`labelwithemptybody`}<
+          +pn{
+            項目の中身（項目の直後に続くインラインテキスト）が空だったとき、その項目をどのように描くか。
+            `labelwithemptybody` は以下の3つの定数ヴァリアントからなる代数的データ型である。
+          }
+
+          +dd{LabelDisplay}{テキストが空でも構わずにラベルを描画する。}
+          +dd{LabelInherit}{自身はラベルを描画せず、自身の空でない子項目があればそこで一緒に描画させてもらう。}
+          +dd{LabelIgnore}{ラベルを描かず、継承もしない。}
+        >
+
+        +param{margin-top}{`length`}<
+          +pn{
+            箇条書きの段落の上に追加であける余白。ただし、
+            \SATySFi; 標準の機能で設けられる段落間空白はこれと独立に挿入される。
+          }
+        >
+
+        +param{margin-bottom}{`length`}<
+          +pn{
+            箇条書きの段落の下に追加であける余白。ただし、
+            \SATySFi; 標準の機能で設けられる段落間空白はこれと独立に挿入される。
+          }
+        >
+
+        +param{context-body}{`context`}<
+          +pn{
+            テキスト処理文脈。
+            ラベル以外の全ての本文が与えられた関数によって変換される。
+          }
+        >
+
+      >
+    >
+
+  >
+
+>
+
+>

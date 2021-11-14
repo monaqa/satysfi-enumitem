@@ -1,0 +1,577 @@
+@require: base/option-ext
+@require: base/typeset/base
+@require: base/length
+@require: base/tuple
+@import: ./param
+@import: ./itemfmt
+
+type itemfmt = context -> int list -> itemconfig
+
+module Enumitem : sig
+
+  % val spaced-itemfmt: length -> context -> itemconfig
+  % val nofmt: length -> context -> itemconfig
+
+  direct +item : [(context -> int list -> itemconfig)?; inline-text; (context -> int list -> itemconfig)?; block-text]  block-cmd
+  direct +itemize : [context -> int list -> itemconfig; block-text]  block-cmd
+  direct \itemize : [context -> int list -> itemconfig; block-text]  inline-cmd
+  direct \sublist: [context -> int list -> itemconfig; itemize] inline-cmd
+  direct +sublist: [context -> int list -> itemconfig; itemize] block-cmd
+  direct \subitem: [block-text] inline-cmd
+
+  val \embed-block: [block-text] inline-cmd
+
+end = struct
+
+  let-mutable counter-stack <- []
+  let-mutable label-stack <- []
+
+  let display-counter () =
+    let-rec aux s lst = match lst with
+      | [] -> ` `
+      | x :: rest -> ((arabic x) ^ #` `# ^ (aux s rest))
+    in
+    `counter:` ^ (aux ` ` !counter-stack) |> display-message
+
+  let push-counter () = counter-stack <- 0 :: !counter-stack
+  let push-label label indent = label-stack <- (label, indent) :: !label-stack
+
+  let inc-counter n = counter-stack <- (
+    match !counter-stack with
+    | [] -> []
+    | x :: rest -> (x + n) :: rest
+  )
+  let pop-counter () = counter-stack <- (
+    match !counter-stack with
+    | [] -> []
+    | x :: rest -> rest
+  )
+
+  let get-all-label () =
+    let label-with-margin (label, indent) =
+      let (wid, h, d) = get-natural-metrics label in
+      inline-graphics wid h d (fun pt -> [ draw-text pt label ])
+    in
+    !label-stack |> List.reverse |> List.map label-with-margin |> List.fold-left (++) inline-nil
+  let get-all-indent () =
+    !label-stack |> List.map Pair.snd |> List.fold-left (+') 0pt
+  let reset-labels () = label-stack <- []
+  let pop-labels () =
+    let label = get-all-label () in
+    let indent = get-all-indent () in
+    let () = reset-labels () in
+    (label, indent)
+
+  let set-counter n = counter-stack <- (
+    match !counter-stack with
+    | [] -> []
+    | x :: rest -> n :: rest
+  )
+  let-inline \set-counter n = let () = set-counter n in {}
+
+  let sublist-stack = EnumitemParam.make '<>
+
+  let empty-deco _ _ _ _ = []
+  let empty-decoset = (empty-deco, empty-deco, empty-deco, empty-deco)
+
+  let no-pad = (0pt, 0pt, 0pt, 0pt)
+
+  let current-itemfmt = EnumitemParam.make EnumitemFormat.init
+
+  let-block ctx +item ?:itemfmt it ?:itemfmt-children inner =
+    let itemfmt = itemfmt |> Option.from (EnumitemParam.get current-itemfmt) in
+
+    let () = inc-counter 1 in
+
+    let record = itemfmt ctx !counter-stack in
+    let ib-label = record#label in
+    let (wid-label, ht-label, dp-label) = get-natural-metrics ib-label in
+    let indent = record#indent wid-label in
+
+    let bbf ctx =
+      let ctx = record#context-body ctx in
+
+      let () = sublist-stack |> EnumitemParam.discard in
+      let ib = read-inline ctx it in
+      let bt-inner-additional = sublist-stack |> EnumitemParam.get in
+
+      let bb-body =
+        let (w, h, d) = get-natural-metrics ib in
+        match (Length.(w == 0pt && h == 0pt && d == 0pt), record#label-with-empty-body) with
+        | (false, _) ->  % 本文がある場合。
+            let () = push-label ib-label indent in
+            let (ib-label-all, indent-all) = pop-labels () in
+            let ib-label-with-skip =
+              inline-skip (0pt -' indent-all) ++ ib-label-all
+            in
+            line-break true true ctx (
+              ib-label-with-skip ++ ib ++ inline-fil
+            )
+        | (true, LabelDisplay) ->  % 本文がないがかまわずラベルを描画してほしい場合。
+            % length != 0pt のときに同じ。 2度書かなくて良い文法がほしい
+            let () = push-label ib-label indent in
+            let (ib-label-all, indent-all) = pop-labels () in
+            let ib-label-with-skip =
+              inline-skip (0pt -' indent-all) ++ ib-label-all
+            in
+            line-break true true ctx (
+              ib-label-with-skip ++ ib ++ inline-fil
+            )
+        | (true, LabelInherit) ->
+            let () = push-label ib-label indent in
+            block-nil
+        | (true, LabelIgnore) ->
+            block-nil
+      in
+
+      let bb-inner =
+
+        % 事前に起こしておく副作用
+        let () = push-counter () in
+        let current-itemfmt-old = EnumitemParam.get current-itemfmt in
+        let () = match itemfmt-children with
+          | Some(fmt) -> current-itemfmt |> EnumitemParam.set fmt
+          | None -> ()
+        in
+
+        % read-block
+        let bb-inner = read-block ctx '<#bt-inner-additional;#inner;> in
+
+        % 起こした副作用の後片付け
+        let () = pop-counter () in
+        let () = current-itemfmt |> EnumitemParam.set current-itemfmt-old in
+
+        if Length.(get-natural-length bb-inner == 0pt) then
+          block-nil
+        else
+          block-frame-breakable ctx (0pt, 0pt, record#margin-top, record#margin-bottom)
+            empty-decoset (fun ctx -> bb-inner)
+      in
+      let () = reset-labels () in
+      bb-body +++ bb-inner
+    in
+    block-frame-breakable ctx (indent, record#indent-right, 0pt, 0pt) empty-decoset bbf
+
+  let-inline ctx \embed-block bt =
+    let ib-block = embed-block-breakable ctx (read-block ctx '<#bt;>) in
+    inline-fil ++ ib-block ++ omit-skip-after
+
+  let-block +itemize itemfmt bt =
+    '< +item?:(EnumitemFormat.init)({})?:(itemfmt)(bt); >
+
+  let-rec convert-item-to-bt itemfmt (Item(it, children)) =
+    let bt-children =
+      children |> List.map (convert-item-to-bt itemfmt)
+               |> List.fold-left (fun bt1 bt2 -> '<#bt1;#bt2;>) '<>
+    in
+    '< +item?:(itemfmt)(it)(bt-children); >
+
+  let-inline \itemize itemfmt bt = {\embed-block<+itemize(itemfmt)(bt);>}
+
+  let-inline ctx \sublist itemfmt (Item(_, children)) =
+    let bt-children =
+      children |> List.map (convert-item-to-bt itemfmt)
+               |> List.fold-left (fun bt1 bt2 -> '<#bt1;#bt2;>) '<>
+    in
+    let () = sublist-stack |> EnumitemParam.set bt-children in
+    inline-nil
+
+  let-block +sublist itemfmt (Item(_, children)) =
+    children |> List.map (convert-item-to-bt itemfmt)
+             |> List.fold-left (fun bt1 bt2 -> '<#bt1;#bt2;>) '<>
+
+  let-inline ctx \subitem bt =
+    let () = sublist-stack |> EnumitemParam.set bt in
+    inline-nil
+
+end
+
+module EnumitemFormatUtil : sig
+
+% text mapping function
+  val to-arabic: int -> inline-text
+  val to-roman : int -> inline-text
+  val to-Roman : int -> inline-text
+  val to-alph  : int -> inline-text
+  val to-Alph  : int -> inline-text
+
+% index decolation function (ordered)
+  val raw     : (int -> inline-text) -> context -> int -> inline-boxes
+  val dot     : (int -> inline-text) -> context -> int -> inline-boxes
+  val paren   : (int -> inline-text) -> context -> int -> inline-boxes
+  val bracket : (int -> inline-text) -> context -> int -> inline-boxes
+
+% index decolation function (unordered)
+  val shape-bullet       : context -> inline-boxes
+  val shape-white-bullet : context -> inline-boxes
+
+% adjuster
+  val align-right: length -> inline-boxes -> inline-boxes
+
+end = struct
+
+% text mapping
+
+  let num-to-roman-char capital num =
+    let unic-point = match num with
+      |  1 -> 0x0049  % `I`
+      |  5 -> 0x0056  % `V`
+      | 10 -> 0x0058  % `X`
+      |  _ -> 0x003F  % `?`
+    in
+    if capital then unic-point else unic-point + 0x20
+
+  let roman-seq num = match num with
+    |  1 -> [ 1;                 ] % i
+    |  2 -> [ 1;  1;             ] % ii
+    |  3 -> [ 1;  1;  1;         ] % iii
+    |  4 -> [ 1;  5;             ] % iv
+    |  5 -> [ 5;                 ] % v
+    |  6 -> [ 5;  1;             ] % vi
+    |  7 -> [ 5;  1;  1;         ] % vii
+    |  8 -> [ 5;  1;  1;  1;     ] % viii
+    |  9 -> [ 1; 10;             ] % ix
+    | 10 -> [10;                 ] % x
+    | 11 -> [10;  1;             ] % xi
+    | 12 -> [10;  1;  1;         ] % xii
+    | 13 -> [10;  1;  1;  1;     ] % xiii
+    | 14 -> [10;  1;  5;         ] % xiv
+    | 15 -> [10;  5;             ] % xv
+    | 16 -> [10;  5;  1;         ] % xvi
+    | 17 -> [10;  5;  1;  1;     ] % xvii
+    | 18 -> [10;  5;  1;  1;  1; ] % xviii
+    | 19 -> [10;  1; 10;         ] % xix
+    | 20 -> [10; 10;             ] % xx
+    | 21 -> [10; 10;  1;         ] % xxi
+    | 22 -> [10; 10;  1;  1;     ] % xxii
+    | 23 -> [10; 10;  1;  1;  1; ] % xxiii
+    | 24 -> [10; 10;  1;  5;     ] % xxiv
+    | 25 -> [10; 10;  5;         ] % xxv
+    |  _ -> [ 0;  0;             ] % ??
+
+  let to-arabic num = embed-string (arabic num)
+
+  let to-roman num =
+    embed-string
+      (string-unexplode
+        (List.map (fun i -> num-to-roman-char false i) (roman-seq num)))
+  let to-Roman num =
+    embed-string
+      (string-unexplode
+        (List.map (fun i -> num-to-roman-char true i) (roman-seq num)))
+
+  let to-alph num = embed-string (string-unexplode [num + 0x0060;])
+  let to-Alph num = embed-string (string-unexplode [num + 0x0040;])
+
+% index decolation function (ordered)
+
+  let raw num-format ctx idx =
+    let it-num = num-format idx in
+    let ib-label = read-inline ctx {#it-num;} in
+    let (wid-label, _, _) = get-natural-metrics ib-label in
+    ib-label
+
+  let dot num-format ctx idx =
+    let it-num = num-format idx in
+    let ib-label = read-inline ctx {#it-num;.} in
+    let (wid-label, _, _) = get-natural-metrics ib-label in
+    ib-label
+
+  let paren num-format ctx idx =
+    let it-num = num-format idx in
+    let ib-label = read-inline ctx {(#it-num;)} in
+    let (wid-label, _, _) = get-natural-metrics ib-label in
+    ib-label
+
+  let bracket num-format ctx idx =
+    let it-num = num-format idx in
+    let ib-label = read-inline ctx {[#it-num;]} in
+    let (wid-label, _, _) = get-natural-metrics ib-label in
+    ib-label
+
+% index decolation function (unordered)
+
+  let shape-bullet ctx =
+    let font-size = get-font-size ctx in
+    let interval = font-size *' 0.3 in
+    let circ ctx (x, y) =
+      let cx = x +' font-size -' (font-size *' 0.3) -' interval in
+      let cy = y +' font-size *' 0.3 in
+      let r = font-size *' 0.15 in
+      Gr.circle (cx, cy) r
+    in
+    inline-graphics font-size (font-size *' 0.5) 0pt
+      (fun (x, y) -> [fill Color.black (circ ctx (x, y))])
+
+  let shape-white-bullet ctx =
+    let font-size = get-font-size ctx in
+    let interval = font-size *' 0.3 in
+    let circ ctx (x, y) =
+      let cx = x +' font-size -' (font-size *' 0.3) -' interval in
+      let cy = y +' font-size *' 0.3 in
+      let r = font-size *' 0.12 in
+      Gr.circle (cx, cy) r
+    in
+    inline-graphics font-size (font-size *' 0.5) 0pt
+      (fun (x, y) -> [stroke 0.8pt Color.black (circ ctx (x, y))])
+
+% adjuster
+  let align-right wid ib =
+    let (wid-ib, ht, dp) = get-natural-metrics ib in
+    inline-graphics wid ht dp (fun (x, y) -> [draw-text (x +' wid -' wid-ib, y) ib])
+end
+
+
+module EnumitemAlias : sig
+
+% default label
+  val nofmt : context -> int list -> itemconfig
+
+% label (ordered list)
+  val raw-arabic     : context -> int list -> itemconfig
+  val dot-arabic     : context -> int list -> itemconfig
+  val paren-arabic   : context -> int list -> itemconfig
+  val bracket-arabic : context -> int list -> itemconfig
+  val raw-roman      : context -> int list -> itemconfig
+  val dot-roman      : context -> int list -> itemconfig
+  val paren-roman    : context -> int list -> itemconfig
+  val bracket-roman  : context -> int list -> itemconfig
+  val raw-Roman      : context -> int list -> itemconfig
+  val dot-Roman      : context -> int list -> itemconfig
+  val paren-Roman    : context -> int list -> itemconfig
+  val bracket-Roman  : context -> int list -> itemconfig
+  val raw-alph       : context -> int list -> itemconfig
+  val dot-alph       : context -> int list -> itemconfig
+  val paren-alph     : context -> int list -> itemconfig
+  val bracket-alph   : context -> int list -> itemconfig
+  val raw-Alph       : context -> int list -> itemconfig
+  val dot-Alph       : context -> int list -> itemconfig
+  val paren-Alph     : context -> int list -> itemconfig
+  val bracket-Alph   : context -> int list -> itemconfig
+
+  val dot-arabic-rec : context -> int list -> itemconfig
+
+% label (unordered list)
+
+  val bullet: context -> int list -> itemconfig
+  val white-bullet: context -> int list -> itemconfig
+
+% label (definition list)
+  val description: (inline-text -> inline-text)?-> inline-text -> context -> int list -> itemconfig
+
+% label (versatile)
+  % ラベルとなるインラインテキストを与えて箇条書きを作成する。
+  val text-label : inline-text -> context -> int list -> itemconfig
+  val index-label : (int -> inline-text) -> context -> int list -> itemconfig
+  val with-depth : (context -> int list -> itemconfig) list -> context -> int list -> itemconfig
+
+% listing command
+  val listing-default-label: context -> int list -> itemconfig
+  val enumerate-default-label: context -> int list -> itemconfig
+
+  direct +listing  : [(context -> int list -> itemconfig)?; itemize] block-cmd
+  direct +enumerate: [(context -> int list -> itemconfig)?; itemize] block-cmd
+  direct \listing  : [(context -> int list -> itemconfig)?; itemize] inline-cmd
+  direct \enumerate: [(context -> int list -> itemconfig)?; itemize] inline-cmd
+
+  direct +description: [block-text] block-cmd
+  val +ditem: [(inline-text -> inline-text)?; inline-text; inline-text; block-text] block-cmd
+
+end = struct
+
+  open EnumitemFormat
+
+  let nofmt = init
+
+% versatile label
+  let id x = x
+
+  let text-label it  ctx _ = (|
+    indent = id;
+    indent-right = 0pt;
+    label = (read-inline ctx it);
+    label-with-empty-body = LabelIgnore;
+    margin-top = 0pt;
+    margin-bottom = 0pt;
+    context-body = id;
+  |)
+
+  let index-label itf  ctx idxlst =
+    let it = match idxlst with
+      | [] -> itf 0
+      | idx :: _ -> itf idx
+    in
+    (|
+    indent = id;
+    indent-right = 0pt;
+    label = (read-inline ctx it);
+    label-with-empty-body = LabelIgnore;
+    margin-top = 0pt;
+    margin-bottom = 0pt;
+    context-body = id;
+  |)
+
+  let with-depth labellst  ctx idxlst =
+    let len-cycle = labellst |> List.length in
+    let label =
+      if len-cycle == 0 then
+        init
+      else
+        labellst |> List.nth (((idxlst |> List.length) - 1) mod len-cycle)
+                 |> Option.from init
+    in
+    label ctx idxlst
+
+% formats
+  let enum-format enumeratef =
+    let labelf ctx idx =
+      let fsizer r = get-font-size ctx *' r in
+      (enumeratef ctx idx |> EnumitemFormatUtil.align-right (fsizer 1.5))
+        ++ inline-skip (fsizer 0.5)
+    in
+    EnumitemFormat.new-ordered labelf
+
+  let raw-arabic = enum-format EnumitemFormatUtil.(raw to-arabic)
+  let dot-arabic = enum-format EnumitemFormatUtil.(dot to-arabic)
+  let paren-arabic = enum-format EnumitemFormatUtil.(paren to-arabic)
+  let bracket-arabic = enum-format EnumitemFormatUtil.(bracket to-arabic)
+
+  let raw-roman = enum-format EnumitemFormatUtil.(raw to-roman)
+  let dot-roman = enum-format EnumitemFormatUtil.(dot to-roman)
+  let paren-roman = enum-format EnumitemFormatUtil.(paren to-roman)
+  let bracket-roman = enum-format EnumitemFormatUtil.(bracket to-roman)
+
+  let raw-Roman = enum-format EnumitemFormatUtil.(raw to-Roman)
+  let dot-Roman = enum-format EnumitemFormatUtil.(dot to-Roman)
+  let paren-Roman = enum-format EnumitemFormatUtil.(paren to-Roman)
+  let bracket-Roman = enum-format EnumitemFormatUtil.(bracket to-Roman)
+
+  let raw-alph = enum-format EnumitemFormatUtil.(raw to-alph)
+  let dot-alph = enum-format EnumitemFormatUtil.(dot to-alph)
+  let paren-alph = enum-format EnumitemFormatUtil.(paren to-alph)
+  let bracket-alph = enum-format EnumitemFormatUtil.(bracket to-alph)
+
+  let raw-Alph = enum-format EnumitemFormatUtil.(raw to-Alph)
+  let dot-Alph = enum-format EnumitemFormatUtil.(dot to-Alph)
+  let paren-Alph = enum-format EnumitemFormatUtil.(paren to-Alph)
+  let bracket-Alph = enum-format EnumitemFormatUtil.(bracket to-Alph)
+
+  let dot-arabic-rec ctx idxlst =
+    let indentf wid-label =
+      Length.max (get-font-size ctx *' 1.5) (wid-label +' get-font-size ctx *' 1.0)
+    in
+    let label =
+      idxlst |> List.map arabic |> List.map embed-string
+             |> List.fold-left (fun it1 it2 -> {#it2;.#it1;}) {}
+             |> read-inline ctx
+    in
+    (|
+      (EnumitemFormat.init ctx idxlst) with
+        indent = indentf;
+        label = label ++ inline-skip (get-font-size ctx *' 0.5);
+    |)
+
+  let-inline ctx \hskip wid-ratio =
+    let l = get-font-size ctx *' wid-ratio in
+    inline-skip l
+
+  let bullet =
+    text-label
+      {\hskip(0.5);\eval(EnumitemFormatUtil.shape-bullet);}
+
+  let white-bullet =
+    text-label
+      {\hskip(0.5);\eval(EnumitemFormatUtil.shape-white-bullet);}
+
+% command
+
+  let listing-default-label ctx idxlst =
+    match List.length idxlst mod 2 with
+    | 1 -> bullet ctx idxlst
+    | _ -> white-bullet ctx idxlst
+
+  let enumerate-default-label ctx idxlst =
+    match List.length idxlst mod 3 with
+    | 1 -> dot-arabic  ctx idxlst
+    | 2 -> paren-alph  ctx idxlst
+    | _ -> paren-roman ctx idxlst
+
+  let-rec convert-item-to-bt (Item(it, children)) =
+    let bt-children =
+      children |> List.map convert-item-to-bt
+               |> List.fold-left (fun bt1 bt2 -> '<#bt1;#bt2;>) '<>
+    in
+    '< +item(it)(bt-children); >
+
+  let-block ctx +listing ?:itemfmt (Item(_, children)) =
+    let itemfmt = itemfmt |> Option.from listing-default-label in
+    let bt-children =
+      children |> List.map convert-item-to-bt
+               |> List.fold-left (fun bt1 bt2 -> '<#bt1;#bt2;>) '<>
+    in
+    read-block ctx '<
+      +itemize(itemfmt)(bt-children);
+    >
+
+  let-inline ctx \listing ?:itemfmt items =
+    let itemfmt = itemfmt |> Option.from listing-default-label in
+    read-inline ctx {\Enumitem.embed-block<+listing?:(itemfmt)(items);>}
+
+  let-block ctx +enumerate ?:itemfmt (Item(_, children)) =
+    let itemfmt = itemfmt |> Option.from enumerate-default-label in
+    let bt-children =
+      children |> List.map convert-item-to-bt
+               |> List.fold-left (fun bt1 bt2 -> '<#bt1;#bt2;>) '<>
+    in
+    read-block ctx '<
+      +itemize(itemfmt)(bt-children);
+    >
+
+  let-inline ctx \enumerate ?:itemfmt items =
+    let itemfmt = itemfmt |> Option.from enumerate-default-label in
+    read-inline ctx {\Enumitem.embed-block<+enumerate?:(itemfmt)(items);>}
+
+% description
+  let description ?:itf it ctx _ =
+    let fsizer r = get-font-size ctx *' r in
+    let itf = itf |> Option.from (fun x -> x) in
+    let indent wid-label =
+      Length.min (get-font-size ctx *' 6.0) wid-label
+    in
+    let label =
+      let ib = read-inline ctx (itf it) in
+      let (wid, _, _) = get-natural-metrics ib in
+      ib ++ inline-skip (Length.max (fsizer 1.0) (fsizer 2.0 -' wid))
+    in
+    (|
+      (EnumitemFormat.init ctx []) with
+        indent = (fun _ -> get-font-size ctx *' 2.0);
+        label = label;
+        label-with-empty-body = LabelDisplay;
+    |)
+
+  % let description-newline ?:itf it ctx _ =
+  %   let itf = itf |> Option.from (fun x -> x) in
+  %   let label =
+  %     let fsizer r = get-font-size ctx *' r in
+  %     let ib = read-inline ctx (itf it) in
+  %     let (wid, _, _) = get-natural-metrics ib in
+  %     ib ++ inline-skip (Length.max (fsizer 1.0) (fsizer 2.0 -' wid))
+  %   in
+  %   (|
+  %     (EnumitemFormat.init ctx []) with
+  %       indent = (fun _ -> get-font-size ctx *' 2.0);
+  %       label = label;
+  %       label-with-empty-body = LabelDisplay;
+  %   |)
+
+  let-block +description bt = '< +itemize(nofmt)(bt); >
+
+  let-block ctx +ditem ?:itf dt it-dd bt-dd =
+    let itf = itf |> Option.from (fun x -> x) in
+    let itemfmtf = description ?:itf in
+    read-block ctx '<
+      +item?:(itemfmtf dt)(it-dd)(bt-dd);
+    >
+
+end
