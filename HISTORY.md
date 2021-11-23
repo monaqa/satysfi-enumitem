@@ -1,5 +1,9 @@
 # HISTORY
 
+## 3.0.1 (2021-11-23)
+
+* fix document file
+
 ## 3.0.0 (2021-11-14)
 
 * major changes in interface and implementation
