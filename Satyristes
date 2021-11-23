@@ -3,7 +3,7 @@
 
 (library
   (name "enumitem")
-  (version "3.0.0")
+  (version "3.0.1")
   (sources
     ((packageDir "src")
      ))
@@ -15,7 +15,7 @@
 
 (libraryDoc
   (name "enumitem-doc")
-  (version "3.0.0")
+  (version "3.0.1")
   (workingDirectory "doc")
   (build
     ((satysfi "enumitem.saty" "-o" "enumitem.pdf")))
