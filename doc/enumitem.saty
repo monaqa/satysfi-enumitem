@@ -864,27 +864,27 @@ document (|
 
     +example(```
       +enumerate?:(with-depth [question; paren-arabic; bullet]){
-        * Lebesgue 測度の劣加法性より（中略）、${m(A) = m(B)} が示された。
+        * Lebesgue 測度の劣加法性より（中略）、${m\paren{A} = m\paren{B}} が示された。
         * ** ${B_N = \bigcup_{n=1}^\infty A_n} とおく。（中略）
           ** 上限の定義より（中略）
         * ** ${C_0 = 1} は明らかである。 ${C_n} は（中略）
           ** ${C_n} は ${C_{n-1}} から適当な部分集合を取り除いてできる集合であるから
              ${C_n \subset C_{n-1}} となり、${\{C_n\}} は減少列である。（中略）
           ** \subitem<
-               +item{内測度 ${m_{J*}(C)}}<
+               +item{内測度 ${m_{J*}\paren{C}}}<
                  +pn{
                    ${C_n} を構成する1つ1つの閉区間の長さは（中略）
                  }
                  +pn{
-                   したがって${m_{J*}(C) = 0}。
+                   したがって${m_{J*}\paren{C} = 0}。
                  }
                >
-               +item{外測度 ${m_{J*}(C)}}<
+               +item{外測度 ${m_{J*}\paren{C}}}<
                  +pn{
                    ${C_n} を構成する1つ1つの閉区間の長さは（中略）
                  }
                  +pn{
-                   したがって${m_{J*}(C) = 1}。
+                   したがって${m_{J*}\paren{C} = 1}。
                  }
                >
                +pn{以上より、${C} は Jordan 非可測集合である。}
@@ -892,27 +892,27 @@ document (|
       }
     ```)<
       +enumerate?:(with-depth [question; paren-arabic; bullet]){
-        * Lebesgue 測度の劣加法性より（中略）、${m(A) = m(B)} が示された。
+        * Lebesgue 測度の劣加法性より（中略）、${m\paren{A} = m\paren{B}} が示された。
         * ** ${B_N = \bigcup_{n=1}^\infty A_n} とおく。（中略）
           ** 上限の定義より（中略）
         * ** ${C_0 = 1} は明らかである。 ${C_n} は（中略）
           ** ${C_n} は ${C_{n-1}} から適当な部分集合を取り除いてできる集合であるから
              ${C_n \subset C_{n-1}} となり、${\{C_n\}} は減少列である。（中略）
           ** \subitem<
-               +item{内測度 ${m_{J*}(C)}}<
+               +item{内測度 ${m_{J*}\paren{C}}}<
                  +pn{
                    ${C_n} を構成する1つ1つの閉区間の長さは（中略）
                  }
                  +pn{
-                   したがって${m_{J*}(C) = 0}。
+                   したがって${m_{J*}\paren{C} = 0}。
                  }
                >
-               +item{外測度 ${m_{J*}(C)}}<
+               +item{外測度 ${m_{J*}\paren{C}}}<
                  +pn{
                    ${C_n} を構成する1つ1つの閉区間の長さは（中略）
                  }
                  +pn{
-                   したがって${m_{J*}(C) = 1}。
+                   したがって${m_{J*}\paren{C} = 1}。
                  }
                >
                +pn{以上より、${C} は Jordan 非可測集合である。}
